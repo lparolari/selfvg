@@ -1,0 +1,13 @@
+data
+data1
+data2
+data3
+data4
+.idea
+.DS_Store
+__pycache*
+output
+wandb/*
+*.pt
+*.err
+*.out

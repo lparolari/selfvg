@@ -292,50 +292,65 @@ class Flickr30kDataset(Dataset):
         return ObjectsFeatureRepository(id2idx_path, objects_feature_file)
 
 
-class ImagesSizeRepository:
-    def __init__(self, images_size_path) -> None:
-        logging.info(f"Loading images size...")
-        with open(images_size_path, "r") as f:
-            self.images_size = json.load(f)
+class Flickr30kDataModule(pl.LightningDataModule):
+    def __init__(self, data_dir, batch_size, num_workers, train_fraction, **kwargs):
+        super().__init__()
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.train_fraction = train_fraction
 
-    def get_width(self, identifier):
-        return self.images_size[str(identifier)][0]
+        self.train_dataset = None
+        self.val_dataset = None
+        self.test_dataset = None
 
-    def get_height(self, identifier):
-        return self.images_size[str(identifier)][1]
+    def prepare_data(self):
+        # we assume dataset is already downloaded
+        pass
 
+    def setup(self, stage=None):
+        if stage == "fit":
+            self.train_dataset = Flickr30kDataset(self.data_dir, "val")  # TODO:
+            self.val_dataset = Flickr30kDataset(self.data_dir, "val")
 
-class ObjectsDetectionRepository:
-    def __init__(self, objects_detection_path) -> None:
-        logging.info(f"Loading objects detection...")
-        with open(objects_detection_path, "r") as f:
-            self.objects_detection = json.load(f)
+        if stage == "test":
+            self.test_dataset = Flickr30kDataset(self.data_dir, "test")
 
-    def get_boxes(self, identifier):
-        return self.objects_detection[str(identifier)]["bboxes"]
+    def train_dataloader(self):
+        from torch.utils.data.sampler import SubsetRandomSampler
 
-    def get_classes(self, identifier):
-        return self.objects_detection[str(identifier)]["classes"]
+        n_samples = len(self.train_dataset)
+        n_subset = int(n_samples * self.train_fraction)
 
-    def get_attrs(self, identifier):
-        return self.objects_detection[str(identifier)]["attrs"]
+        train_indices = np.random.choice(n_samples, size=n_subset, replace=False)
 
+        sampler = SubsetRandomSampler(train_indices)
 
-class ObjectsFeatureRepository:
-    def __init__(self, id2idx_path, objects_feature_path) -> None:
-        logging.info(f"Loading objects feature img2id...")
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            drop_last=True,
+            sampler=sampler,
+        )
 
-        with open(id2idx_path, "rb") as f:
-            self.id2idx = pickle.load(f)
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=True,
+        )
 
-        logging.info(f"Loading objects feature h5...")
-
-        with h5py.File(objects_feature_path, "r") as hf:
-            # print(hf.keys()) 	#<KeysViewHDF5 ['bboxes', 'features', 'pos_bboxes']>
-            self.features = np.array(hf.get("features"))
-            self.positions = np.array(hf.get("pos_bboxes"))
-
-    def get_feature(self, identifier):
-        idx = self.id2idx[identifier]
-        pos = self.positions[idx]
-        return self.features[pos[0] : pos[1]]
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+            pin_memory=True,
+            drop_last=True,
+        )

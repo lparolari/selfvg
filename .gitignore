@@ -1,13 +1,25 @@
+# misc
+.idea
+.DS_Store
+__pycache*
+
+# data
 data
 data1
 data2
 data3
 data4
-.idea
-.DS_Store
-__pycache*
+
+# checkpoint dir
 output
-wandb/*
-*.pt
+
+# cluster logs
 *.err
 *.out
+
+# wandg
+artifacts/
+wandb/
+
+# lightning
+lightning_logs/

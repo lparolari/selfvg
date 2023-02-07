@@ -9,7 +9,12 @@ import numpy as np
 import re
 
 from typing import List, Tuple, Dict, Any
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
+from weakvg.repo import (
+    ImagesSizeRepository,
+    ObjectsDetectionRepository,
+    ObjectsFeatureRepository,
+)
 
 
 class Sample:
@@ -113,30 +118,32 @@ class Sample:
             self.identifier
         )  # [x, 2048]
 
-    def as_entries(self) -> List[Dict[str, Any]]:
-        entries = []
+    @property
+    def __dict__(self) -> Dict[str, Any]:
+        sentence_ids = self.get_sentences_ids()
 
-        for sentence_id in self.get_sentences_ann():
-            entries.append(
-                {
-                    # text
-                    "sentence": self.get_sentence(sentence_id),
-                    "queries": self.get_queries(sentence_id),
-                    # image
-                    "image_w": self.get_image_w(),
-                    "image_h": self.get_image_h(),
-                    # box
-                    "proposals": self.get_proposals(),
-                    "classes": self.get_classes(),
-                    "attrs": self.get_attrs(),
-                    # feats
-                    "proposals_feat": self.get_proposals_feat(),
-                    # targets
-                    "targets": self.get_targets(sentence_id),
-                }
-            )
+        def repeat_sent(fn):
+            return [fn(sentence_id) for sentence_id in sentence_ids]
 
-        return entries
+        def repeat(fn):
+            return [fn() for _ in sentence_ids]
+
+        return {
+            # text
+            "sentence": repeat_sent(self.get_sentence),
+            "queries": repeat_sent(self.get_queries),
+            # image
+            "image_w": repeat(self.get_image_w),
+            "image_h": repeat(self.get_image_h),
+            # box
+            "proposals": repeat(self.get_proposals),
+            "classes": repeat(self.get_classes),
+            "attrs": repeat(self.get_attrs),
+            # feats
+            "proposals_feat": repeat(self.get_proposals_feat),
+            # targets
+            "targets": repeat_sent(self.get_targets),
+        }
 
     def _get_sentences_file(self) -> str:
         return os.path.join(
@@ -186,9 +193,12 @@ class Sample:
 
 
 class Flickr30kDataset(Dataset):
-    def __init__(self, data_dir, split):
+    def __init__(self, data_dir, split, word_indexer):
         self.data_dir = data_dir
         self.split = split
+        self.word_indexer = word_indexer
+
+        self.max_sentence_len = 50
 
         self.identifiers = None
         """A list of numbers that identify each sample"""
@@ -206,8 +216,10 @@ class Flickr30kDataset(Dataset):
         identifier = self.identifiers[idx]
 
         sample = self.samples[identifier]
+        data = vars(sample)
 
-        data = sample.as_entries()
+        # sentence_tok = self.tokenize(data["sentence"])
+        # sentence = self.pad(sentence_tok, self.max_sentence_len)
 
         # sentence
         # queries
@@ -241,11 +253,12 @@ class Flickr30kDataset(Dataset):
             "objects_feature": objects_feature_repo,
         }
 
-        samples = []
+        samples = {}
 
         for identifier in self.identifiers:
-            sample = Sample(identifier, data_dir=self.data_dir, precomputed=precomputed)
-            samples.append(sample)
+            samples[identifier] = Sample(
+                identifier, data_dir=self.data_dir, precomputed=precomputed
+            )
 
         self.samples = samples
 

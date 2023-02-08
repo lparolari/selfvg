@@ -1,12 +1,13 @@
 import logging
-import pytorch_lightning as pl
-from weakvg.dataset import Flickr30kDataModule
-from weakvg.wordindexer import WordIndexer
-
-# import wandb
-import torch
 from typing import Any
-import torchtext
+
+import pytorch_lightning as pl
+import torch
+from torchtext.data.utils import get_tokenizer
+
+from weakvg.dataset import Flickr30kDataModule
+from weakvg.wordvec import get_wordvec
+
 
 class MyModel(pl.LightningModule):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -50,22 +51,16 @@ if __name__ == "__main__":
     #     log_model=True,
     #     save_dir="data/wandb",
     # )
-
-    wordvec = torchtext.vocab.GloVe(name='6B', dim=300, cache="data/glove")
-
-    pad_token = '<PAD>'
-    unk_token = '<UNK>'
-    vocab = torchtext.vocab.vocab(wordvec.stoi, specals=[pad_token, unk_token], default_index=-1)
-
-
-    word_indexer = WordIndexer()
+    tokenizer = get_tokenizer("basic_english")
+    wordvec, vocab = get_wordvec()
 
     dm = Flickr30kDataModule(
         data_dir="data/flickr30k",
-        word_indexer=word_indexer,
         batch_size=32,
         num_workers=4,
         train_fraction=1.0,
+        tokenizer=tokenizer,
+        vocab=vocab,
     )
 
     model = MyModel()

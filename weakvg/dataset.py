@@ -17,7 +17,7 @@ from weakvg.repo import (
 )
 
 
-class Sample:
+class Flickr30kDatum:
     def __init__(
         self, identifier: int, *, data_dir: str, precomputed: Dict[str, Dict[int, Any]]
     ):
@@ -118,32 +118,27 @@ class Sample:
             self.identifier
         )  # [x, 2048]
 
-    @property
-    def __dict__(self) -> Dict[str, Any]:
+    def __iter__(self):
         sentence_ids = self.get_sentences_ids()
 
-        def repeat_sent(fn):
-            return [fn(sentence_id) for sentence_id in sentence_ids]
-
-        def repeat(fn):
-            return [fn() for _ in sentence_ids]
-
-        return {
-            # text
-            "sentence": repeat_sent(self.get_sentence),
-            "queries": repeat_sent(self.get_queries),
-            # image
-            "image_w": repeat(self.get_image_w),
-            "image_h": repeat(self.get_image_h),
-            # box
-            "proposals": repeat(self.get_proposals),
-            "classes": repeat(self.get_classes),
-            "attrs": repeat(self.get_attrs),
-            # feats
-            "proposals_feat": repeat(self.get_proposals_feat),
-            # targets
-            "targets": repeat_sent(self.get_targets),
-        }
+        for sentence_id in sentence_ids:
+            yield {
+                "identifier": self.identifier,
+                # text
+                "sentence": self.get_sentence(sentence_id),
+                "queries": self.get_queries(sentence_id),
+                # image
+                "image_w": self.get_image_w(),
+                "image_h": self.get_image_h(),
+                # box
+                "proposals": self.get_proposals(),
+                "labels": self.get_classes(),
+                "attrs": self.get_attrs(),
+                # feats
+                "proposals_feat": self.get_proposals_feat(),
+                # targets
+                "targets": self.get_targets(sentence_id),
+            }
 
     def _get_sentences_file(self) -> str:
         return os.path.join(
@@ -193,12 +188,11 @@ class Sample:
 
 
 class Flickr30kDataset(Dataset):
-    def __init__(self, data_dir, split, word_indexer):
+    def __init__(self, data_dir, split, tokenizer, vocab):
         self.data_dir = data_dir
         self.split = split
-        self.word_indexer = word_indexer
-
-        self.max_sentence_len = 50
+        self.tokenizer = tokenizer
+        self.vocab = vocab
 
         self.identifiers = None
         """A list of numbers that identify each sample"""
@@ -210,35 +204,36 @@ class Flickr30kDataset(Dataset):
         self.preflight_check()
 
     def __len__(self):
-        return len(self.identifiers)
+        return len(self.samples)
 
     def __getitem__(self, idx):
-        identifier = self.identifiers[idx]
+        sample = self.samples[idx]
 
-        sample = self.samples[identifier]
-        data = vars(sample)
+        meta = [idx, sample["identifier"]]
+        sentence = self._prepare_sentence(sample["sentence"])
+        queries = self._prepare_queries(sample["queries"])
+        image_w = sample["image_w"]
+        image_h = sample["image_h"]
+        proposals = sample["proposals"]
+        labels = self._prepare_labels(sample["labels"])
+        attrs = self._prepare_labels(sample["attrs"])
+        proposals_feat = sample["proposals_feat"]
+        targets = sample["targets"]
 
-        # sentence_tok = self.tokenize(data["sentence"])
-        # sentence = self.pad(sentence_tok, self.max_sentence_len)
+        x = {
+            "meta": meta,
+            "sentence": sentence,
+            "queries": queries,
+            "image_w": image_w,
+            "image_h": image_h,
+            "proposals": proposals,
+            "labels": labels,
+            "attrs": attrs,
+            "proposals_feat": proposals_feat,
+            "targets": targets,
+        }
 
-        # sentence
-        # queries
-
-        # image_w
-        # image_h
-
-        # proposals
-        # classes
-        # attrs
-
-        # proposals_feat
-
-        # targets
-
-        x = None
-        y = data["targets"]
-
-        return x, y
+        return x
 
     def load(self):
         self._load_identifiers()
@@ -253,12 +248,13 @@ class Flickr30kDataset(Dataset):
             "objects_feature": objects_feature_repo,
         }
 
-        samples = {}
+        samples = []
 
         for identifier in self.identifiers:
-            samples[identifier] = Sample(
+            for sample in Flickr30kDatum(
                 identifier, data_dir=self.data_dir, precomputed=precomputed
-            )
+            ):
+                samples.append(sample)
 
         self.samples = samples
 
@@ -266,10 +262,21 @@ class Flickr30kDataset(Dataset):
         if len(self.identifiers) == 0:
             raise RuntimeError("Empty dataset, please check the identifiers file")
 
-        if len(self.samples) != len(self.identifiers):
-            raise RuntimeError(
-                "The number of samples is different from the number of identifiers"
-            )
+        if len(self.samples) == 0:
+            raise RuntimeError("Cannot create dataset with 0 samples")
+
+    def _prepare_sentence(self, sentence: str) -> List[int]:
+        sentence = self.tokenizer(sentence)
+        sentence = self.vocab(sentence)
+        return sentence
+
+    def _prepare_queries(self, queries: List[str]) -> List[List[int]]:
+        queries = [self.tokenizer(query) for query in queries]
+        queries = [self.vocab(query) for query in queries]
+        return queries
+
+    def _prepare_labels(self, labels: List[str]) -> List[List[int]]:
+        return self.vocab(labels)
 
     def _load_identifiers(self):
         identifier_file = os.path.join(
@@ -306,12 +313,23 @@ class Flickr30kDataset(Dataset):
 
 
 class Flickr30kDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir, batch_size, num_workers, train_fraction, **kwargs):
+    def __init__(
+        self,
+        data_dir,
+        batch_size,
+        num_workers,
+        train_fraction,
+        tokenizer,
+        vocab,
+        **kwargs,
+    ):
         super().__init__()
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.train_fraction = train_fraction
+        self.tokenizer = tokenizer
+        self.vocab = vocab
 
         self.train_dataset = None
         self.val_dataset = None
@@ -322,12 +340,19 @@ class Flickr30kDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        if stage == "fit":
-            self.train_dataset = Flickr30kDataset(self.data_dir, "val")  # TODO:
-            self.val_dataset = Flickr30kDataset(self.data_dir, "val")
+        dataset_kwargs = {
+            "data_dir": self.data_dir,
+            "tokenizer": self.tokenizer,
+            "vocab": self.vocab,
+        }
 
-        if stage == "test":
-            self.test_dataset = Flickr30kDataset(self.data_dir, "test")
+        if stage == "fit" or stage is None:
+            # TODO: replace "val"
+            self.train_dataset = Flickr30kDataset(split="val", **dataset_kwargs)
+            self.val_dataset = Flickr30kDataset(split="val", **dataset_kwargs)
+
+        if stage == "test" or stage is None:
+            self.test_dataset = Flickr30kDataset(split="test", **dataset_kwargs)
 
     def train_dataloader(self):
         from torch.utils.data.sampler import SubsetRandomSampler

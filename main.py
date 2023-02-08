@@ -1,43 +1,11 @@
 import logging
-from typing import Any
 
 import pytorch_lightning as pl
-import torch
 from torchtext.data.utils import get_tokenizer
 
 from weakvg.dataset import Flickr30kDataModule
+from weakvg.model import MyModel
 from weakvg.wordvec import get_wordvec
-
-
-class MyModel(pl.LightningModule):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.linear = torch.nn.Linear(32, 2)
-
-    def forward(self, x):
-        return x
-
-    # def training_step(self, batch, batch_idx):
-    #     # inputs
-    #     sentence = batch["sentence"]
-    #     query = batch["query"]
-    #     labels = batch["labels"]
-    #     proposals = batch["proposals"]
-    #     proposals_feat = batch["proposals_feat"]
-
-    #     y_hat = self(x)
-    #     return loss
-
-    def training_step(self, batch, batch_idx):
-        print(batch_idx, batch)
-        return {"loss": torch.tensor(0.0)}
-
-    def validation_step(self, batch, batch_idx):
-        return batch
-
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.02)
-
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -52,19 +20,20 @@ if __name__ == "__main__":
     #     log_model=True,
     #     save_dir="data/wandb",
     # )
+
     tokenizer = get_tokenizer("basic_english")
     wordvec, vocab = get_wordvec()
 
     dm = Flickr30kDataModule(
         data_dir="data/flickr30k",
-        batch_size=32,
+        batch_size=1,
         num_workers=1,
         train_fraction=1.0,
         tokenizer=tokenizer,
         vocab=vocab,
     )
 
-    model = MyModel()
+    model = MyModel(wordvec, vocab)
 
     trainer = pl.Trainer(
         gpus=0,

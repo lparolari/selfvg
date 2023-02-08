@@ -355,11 +355,11 @@ class Flickr30kDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data_dir,
-        batch_size,
-        num_workers,
-        train_fraction,
         tokenizer,
         vocab,
+        num_workers=1,
+        batch_size=32,
+        train_fraction=1,
         **kwargs,
     ):
         super().__init__()

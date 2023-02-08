@@ -1,17 +1,25 @@
 import unittest
 
-from weakvg.dataset import Flickr30kDataset, Flickr30kDatum
-from weakvg.wordvec import get_wordvec
+from weakvg.dataset import Flickr30kDataset, Flickr30kDatum, Flickr30kDataModule
+
+
+def _get_tokenizer():
+    from torchtext.data.utils import get_tokenizer
+
+    return get_tokenizer("basic_english")
+
+
+def _get_vocab():
+    from weakvg.wordvec import get_wordvec
+
+    _, vocab = get_wordvec()
+
+    return vocab
 
 
 def _make_dataset(split):
-    from torchtext.data.utils import get_tokenizer
-
-    tokenizer = get_tokenizer("basic_english")
-    _, vocab = get_wordvec()
-
     return Flickr30kDataset(
-        split, data_dir="data/flickr30k", tokenizer=tokenizer, vocab=vocab
+        split, data_dir="data/flickr30k", tokenizer=_get_tokenizer(), vocab=_get_vocab()
     )
 
 
@@ -257,3 +265,44 @@ class TestFlickr30kDatum(unittest.TestCase):
         return Flickr30kDatum(
             92679312, data_dir="data/flickr30k", precomputed=self.precomputed
         )
+
+
+class TestFlickr30kDataModule(unittest.TestCase):
+    def test_test_dataloader(self):
+        dm = Flickr30kDataModule(
+            data_dir="data/flickr30k",
+            batch_size=2,
+            num_workers=1,
+            tokenizer=_get_tokenizer(),
+            vocab=_get_vocab(),
+        )
+
+        dm.setup("test")  # should load test dataset
+
+        test_dl = dm.test_dataloader()
+
+        self.assertEqual(len(test_dl), 5000 / 2)  # 5000 samples / 2 batch size = 2500
+
+        # assert some properties of the batch
+
+        batch = next(iter(test_dl))
+
+        queries = batch["queries"]
+        targets = batch["targets"]
+
+        self.assertEqual(queries.shape[1], targets.shape[1])  # n queries == n targets
+
+        self.assertEqual(queries.shape[-1], 12)  # n words in query
+        self.assertEqual(targets.shape[-1], 4)  # target is a bounding box, i.e. tensor of 4 values x1, y1, x2, y2
+
+        proposals = batch["proposals"]
+        proposals_feat = batch["proposals_feat"]
+        labels = batch["labels"]
+        attrs = batch["attrs"]
+
+        self.assertEqual(proposals.shape[1], proposals_feat.shape[1])  # n proposals
+        self.assertEqual(proposals.shape[1], labels.shape[1])  # n proposals
+        self.assertEqual(proposals.shape[1], attrs.shape[1])  # n proposals
+
+        self.assertEqual(proposals.shape[-1], 4)  # bounding box x1, y1, x2, y2
+        self.assertEqual(proposals_feat.shape[-1], 2048)  # features

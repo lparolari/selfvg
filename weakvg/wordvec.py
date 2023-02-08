@@ -2,7 +2,7 @@ import logging
 from typing import List, Tuple, Optional
 
 import torch
-from torchtext.vocab import GloVe, vocab as make_vocab
+from torchtext.vocab import GloVe, Vocab, vocab as make_vocab, build_vocab_from_iterator
 
 Alternative = Optional[List[str]]
 Missing = Tuple[str, Alternative]
@@ -93,13 +93,11 @@ def get_wordvec(
     return_vocab=True,
 ):
     wordvec = GloVe(name, dim, cache=cache)
+    vocab = build_vocab(wordvec)
 
-    unk_index = 0
-    unk_token = "<unk>"
-
-    vocab = make_vocab(wordvec.stoi, specials=[unk_token])
-
-    vocab.set_default_index(unk_index)
+    # add the embedding for the special token position 0
+    padding_emb = torch.zeros(1, wordvec.dim)
+    wordvec.vectors = torch.cat([padding_emb, wordvec.vectors], dim=0)
 
     missing = fix_oov(check_oov, wordvec, vocab)
     fixed = [label for label, alternative in missing if alternative is not None]
@@ -110,3 +108,20 @@ def get_wordvec(
         return wordvec, vocab
 
     return wordvec
+
+
+def build_vocab(wordvec):
+    """
+    Build a vocab using GloVe tokens
+    """
+    unk_index = 0
+    unk_token = "<unk>"
+
+    # min_freq=0 is required to include the first token in `wordvec.stoi` which has index 0
+    # the `make_vocab` function requires an ordered dict as input and discards entries
+    # whose value is less than `min_freq`
+    vocab = make_vocab(wordvec.stoi, specials=[unk_token], min_freq=0)
+    
+    vocab.set_default_index(unk_index)
+
+    return vocab

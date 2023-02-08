@@ -1,28 +1,40 @@
 import unittest
 
-from weakvg.dataset import Flickr30kDataset, Sample
+from weakvg.dataset import Flickr30kDataset, Flickr30kDatum
+from weakvg.wordvec import get_wordvec
+
+
+def _make_dataset(split):
+    from torchtext.data.utils import get_tokenizer
+
+    tokenizer = get_tokenizer("basic_english")
+    _, vocab = get_wordvec()
+
+    return Flickr30kDataset(
+        split, data_dir="data/flickr30k", tokenizer=tokenizer, vocab=vocab
+    )
 
 
 class TestFlickr30kDataset(unittest.TestCase):
     def test_load_samples_val(self):
-        dataset = Flickr30kDataset(data_dir="data/flickr30k", split="val")
+        dataset = _make_dataset("val")
 
-        self.assertEqual(len(dataset), 1000)
+        self.assertEqual(len(dataset), 5000)
 
     def test_load_samples_test(self):
-        dataset = Flickr30kDataset(data_dir="data/flickr30k", split="test")
+        dataset = _make_dataset("test")
 
-        self.assertEqual(len(dataset), 1000)
+        self.assertEqual(len(dataset), 5000)
 
     @unittest.skip("Skip train dataset as it is too large")
     def test_load_samples_train(self):
-        dataset = Flickr30kDataset(data_dir="data/flickr30k", split="train")
+        dataset = _make_dataset("train")
 
-        self.assertEqual(len(dataset), 29783)
+        self.assertEqual(len(dataset), 148915)
 
 
-class TestSample(unittest.TestCase):
-    dataset = Flickr30kDataset(data_dir="data/flickr30k", split="test")
+class TestFlickr30kDatum(unittest.TestCase):
+    dataset = _make_dataset("test")
 
     images_size = dataset._open_images_size()
     objects_detection = dataset._open_objects_detection()
@@ -35,7 +47,7 @@ class TestSample(unittest.TestCase):
     }
 
     def test_get_sentences_ann(self):
-        sample = Sample(
+        sample = Flickr30kDatum(
             92679312, data_dir="data/flickr30k", precomputed=self.precomputed
         )
 
@@ -239,10 +251,9 @@ class TestSample(unittest.TestCase):
 
         proposals_feat_shape = (33, 2048)
 
-        self.assertEqual(
-            sample.get_proposals_feat().shape,
-            proposals_feat_shape
-        )
+        self.assertEqual(sample.get_proposals_feat().shape, proposals_feat_shape)
 
     def make_sample(self):
-        return Sample(92679312, data_dir="data/flickr30k", precomputed=self.precomputed)
+        return Flickr30kDatum(
+            92679312, data_dir="data/flickr30k", precomputed=self.precomputed
+        )

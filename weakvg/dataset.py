@@ -221,7 +221,7 @@ class Flickr30kDatum:
 
 
 class Flickr30kDataset(Dataset):
-    def __init__(self, data_dir, split, tokenizer, vocab):
+    def __init__(self, split, data_dir, tokenizer, vocab):
         self.data_dir = data_dir
         self.split = split
         self.tokenizer = tokenizer

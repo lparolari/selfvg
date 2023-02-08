@@ -28,14 +28,14 @@ class WordvecTestCase(unittest.TestCase):
     def test_get_wordvec(self):
         wordvec, vocab = get_wordvec(check_oov=[])
   
-        self.assertEqual(len(vocab), 400000)
-        self.assertEqual(len(wordvec), 400000)
+        self.assertEqual(len(vocab), 400000 + 1)  # +1 for padding
+        self.assertEqual(len(wordvec), 400000 + 1)
     
     def test_get_wordvec__check_oov(self):
         wordvec, vocab = get_wordvec(check_oov=self._get_objects_vocab())
   
-        self.assertEqual(len(vocab), 400299)
-        self.assertEqual(len(wordvec), 400299)
+        self.assertEqual(len(vocab), 400000 + 299 + 1)  # +299 for fixed oov, +1 for padding
+        self.assertEqual(len(wordvec), 400000 + 299 + 1)
 
     def _get_objects_vocab(self):
         with open("data/objects_vocab.txt", "r") as f:

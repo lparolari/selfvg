@@ -104,6 +104,9 @@ class Flickr30kDatum:
             self.identifier
         )  # [x, 2048]
 
+    def has_queries_for(self, sentence_id) -> bool:
+        return len(self.get_queries(sentence_id)) > 0
+
     def has_target_for(self, query_ann: str) -> bool:
         return self._get_entity_id(query_ann) in self._targets_ann
 
@@ -111,6 +114,9 @@ class Flickr30kDatum:
         sentence_ids = self.get_sentences_ids()
 
         for sentence_id in sentence_ids:
+            if not self.has_queries_for(sentence_id):
+                continue
+
             yield {
                 "identifier": self.identifier,
                 # text

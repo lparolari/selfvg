@@ -29,7 +29,8 @@ class MyModel(pl.LightningModule):
     #     return loss
 
     def training_step(self, batch, batch_idx):
-        return batch
+        print(batch_idx, batch)
+        return {"loss": torch.tensor(0.0)}
 
     def validation_step(self, batch, batch_idx):
         return batch
@@ -57,7 +58,7 @@ if __name__ == "__main__":
     dm = Flickr30kDataModule(
         data_dir="data/flickr30k",
         batch_size=32,
-        num_workers=4,
+        num_workers=1,
         train_fraction=1.0,
         tokenizer=tokenizer,
         vocab=vocab,

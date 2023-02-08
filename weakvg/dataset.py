@@ -15,6 +15,9 @@ from weakvg.repo import (
     ObjectsDetectionRepository,
     ObjectsFeatureRepository,
 )
+from weakvg.utils import union_box
+
+Box = List[int]
 
 
 class Flickr30kDatum:
@@ -52,19 +55,17 @@ class Flickr30kDatum:
     def get_queries(self, sentence_id, query_id=None, *, return_ann=False) -> List[str]:
         _, sentence_ann = self.get_sentence(sentence_id, return_ann=True)
 
+        queries_ann = self._extract_queries_ann(sentence_ann)
+
+        # important: we need to filter out queries without targets in order to
+        #            produce aligned data
+        queries_ann = [
+            query_ann for query_ann in queries_ann if self.has_target_for(query_ann)
+        ]
+
+        queries = [self._extract_phrase(query_ann) for query_ann in queries_ann]
+
         a_slice = slice(query_id, query_id and query_id + 1)
-
-        query_pattern = r"\[(.*?)\]"
-        queries_ann = re.findall(query_pattern, sentence_ann)
-
-        # query_ann has the entity annotation in the first part,
-        # while query in the second
-        # e.g.: '/EN#283585/people A young white boy'
-
-        def get_phrase(query_ann):
-            return query_ann.split(" ", 1)[1]
-
-        queries = [get_phrase(query_ann) for query_ann in queries_ann]
 
         if return_ann:
             return queries[a_slice], queries_ann[a_slice]
@@ -72,27 +73,12 @@ class Flickr30kDatum:
         return queries[a_slice]
 
     def get_targets(self, sentence_id) -> List[List[int]]:
+        targets_ann = self._targets_ann
         _, queries_ann = self.get_queries(sentence_id, return_ann=True)
 
-        entity_pattern = r"\/EN\#(\d+)"
-
-        def get_ann(query_ann):
-            return query_ann.split(" ", 1)[0]
-
-        queries_ann = [get_ann(query_ann) for query_ann in queries_ann]
-        entities = [int(re.findall(entity_pattern, ann)[0]) for ann in queries_ann]
-
-        targets_ann = self._targets_ann
-
-        targets = []
-
-        for entity in entities:
-            if not entity in targets_ann:
-                continue
-
-            targets.append(targets_ann[entity])
-
-        return targets
+        return [
+            targets_ann[self._get_entity_id(query_ann)] for query_ann in queries_ann
+        ]
 
     def get_image_w(self) -> int:
         if "images_size" not in self.precomputed:
@@ -117,6 +103,9 @@ class Flickr30kDatum:
         return self.precomputed["objects_feature"].get_feature(
             self.identifier
         )  # [x, 2048]
+
+    def has_target_for(self, query_ann: str) -> bool:
+        return self._get_entity_id(query_ann) in self._targets_ann
 
     def __iter__(self):
         sentence_ids = self.get_sentences_ids()
@@ -183,8 +172,52 @@ class Flickr30kDatum:
 
         self._targets_ann = targets_ann
 
-    def _remove_sentence_ann(self, sentence: str) -> str:
+    @staticmethod
+    def _remove_sentence_ann(sentence: str) -> str:
         return re.sub(r"\[[^ ]+ ", "", sentence).replace("]", "")
+
+    @staticmethod
+    def _extract_queries_ann(sentence_ann: str) -> List[str]:
+        query_pattern = r"\[(.*?)\]"
+        queries_ann = re.findall(query_pattern, sentence_ann)
+        return queries_ann
+
+    @staticmethod
+    def _extract_phrase(query_ann: str) -> str:
+        """
+        Extracts the phrase from the query annotation
+
+        Example:
+          '/EN#283585/people A young white boy' --> 'A young white boy'
+        """
+        return query_ann.split(" ", 1)[1]
+
+    @staticmethod
+    def _extract_entity(query_ann: str) -> str:
+        """
+        Extracts the entity from the query annotation
+
+        Example:
+          '/EN#283585/people A young white boy' --> '/EN#283585/people'
+        """
+        return query_ann.split(" ", 1)[0]
+
+    @staticmethod
+    def _get_entity_id(query_ann: str) -> int:
+        """
+        Extracts the entity id from the query annotation
+
+        Example:
+          '/EN#283585/people A young white boy' --> 283585
+        """
+        entity = Flickr30kDatum._extract_entity(query_ann)
+
+        entity_id_pattern = r"\/EN\#(\d+)"
+
+        matches = re.findall(entity_id_pattern, entity)
+        first_match = matches[0]
+
+        return int(first_match)
 
 
 class Flickr30kDataset(Dataset):
@@ -218,9 +251,14 @@ class Flickr30kDataset(Dataset):
         labels = self._prepare_labels(sample["labels"])
         attrs = self._prepare_labels(sample["attrs"])
         proposals_feat = sample["proposals_feat"]
-        targets = sample["targets"]
+        targets = self._prepare_targets(sample["targets"])
 
-        x = {
+        assert len(queries) == len(targets), f"Expected length of `targets` to be {len(queries)}, got {len(targets)}"
+        assert len(proposals) == len(labels), f"Expected length of `labels` to be {len(proposals)}, got {len(labels)}"
+        assert len(proposals) == len(attrs), f"Expected length of `attrs` to be {len(proposals)}, got {len(attrs)}"
+        assert len(proposals) == len(proposals_feat), f"Expected length of `proposals_feat` to be {len(proposals)}, got {len(proposals_feat)}"
+
+        return {
             "meta": meta,
             "sentence": sentence,
             "queries": queries,
@@ -232,8 +270,6 @@ class Flickr30kDataset(Dataset):
             "proposals_feat": proposals_feat,
             "targets": targets,
         }
-
-        return x
 
     def load(self):
         self._load_identifiers()
@@ -277,6 +313,9 @@ class Flickr30kDataset(Dataset):
 
     def _prepare_labels(self, labels: List[str]) -> List[List[int]]:
         return self.vocab(labels)
+
+    def _prepare_targets(self, targets: List[List[Box]]) -> List[Box]:
+        return [union_box(target) for target in targets]
 
     def _load_identifiers(self):
         identifier_file = os.path.join(
@@ -371,6 +410,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
             pin_memory=True,
             drop_last=True,
             sampler=sampler,
+            collate_fn=collate_fn,
         )
 
     def val_dataloader(self):
@@ -381,6 +421,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
             shuffle=False,
             pin_memory=True,
             drop_last=True,
+            collate_fn=collate_fn,
         )
 
     def test_dataloader(self):
@@ -391,4 +432,29 @@ class Flickr30kDataModule(pl.LightningDataModule):
             shuffle=False,
             pin_memory=True,
             drop_last=True,
+            collate_fn=collate_fn,
         )
+
+
+def collate_fn(batch):
+    import pandas as pd
+    from weakvg.padding import pad_sentence, pad_queries, pad_proposals, pad_targets
+
+    sentence_max_length = 32
+    query_max_length = 12
+    proposal_max_length = 100
+
+    batch = pd.DataFrame(batch).to_dict(orient="list")
+
+    return {
+        "meta": torch.tensor(batch["meta"]),
+        "sentence": pad_sentence(batch["sentence"], sentence_max_length),
+        "queries": pad_queries(batch["queries"], query_max_length),
+        "image_w": torch.tensor(batch["image_w"]),
+        "image_h": torch.tensor(batch["image_h"]),
+        "proposals": pad_proposals(batch["proposals"], proposal_max_length),
+        "labels": pad_proposals(batch["labels"], proposal_max_length),
+        "attrs": pad_proposals(batch["attrs"], proposal_max_length),
+        "proposals_feat": pad_proposals(batch["proposals_feat"], proposal_max_length),
+        "targets": pad_targets(batch["targets"]),
+    }

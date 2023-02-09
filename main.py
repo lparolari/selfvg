@@ -37,7 +37,8 @@ def main():
     model = MyModel(wordvec, vocab)
 
     trainer = pl.Trainer(
-        gpus=0,
+        accelerator="gpu",
+        devices=1,
         max_epochs=10,
     )
 

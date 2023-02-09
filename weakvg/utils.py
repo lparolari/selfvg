@@ -25,7 +25,7 @@ def iou(candidates, targets):
 
     scores = box_iou(candidates.view(-1, 4), targets.view(-1, 4))  #  [b * q, b * q]
 
-    index = torch.arange(b * q).unsqueeze(-1)  # [b * q, 1]
+    index = torch.arange(b * q).to(candidates.device).unsqueeze(-1)  # [b * q, 1]
 
     scores = scores.gather(-1, index)  # [b * q, 1]
     scores = scores.view(b, q)  # [b, q]

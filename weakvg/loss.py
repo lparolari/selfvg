@@ -18,7 +18,7 @@ class Loss(nn.Module):
         scores = scores.sum(-2) / n_queries  # [b, b]
         scores = scores.masked_fill(~has_query, 0)
 
-        targets = torch.eye(b)  # [b, b]
+        targets = torch.eye(b).to(queries.device)  # [b, b]
         targets = targets.argmax(-1)  # [b]
 
         positive_index = targets.unsqueeze(-1)  # [b, 1]

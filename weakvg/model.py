@@ -99,7 +99,7 @@ class MyModel(pl.LightningModule):
         q = scores.shape[1]
         p = scores.shape[3]
 
-        index = torch.arange(b)  # [b]
+        index = torch.arange(b).to(self.device)  # [b]
         index = index.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)  # [b, 1, 1, 1]
         index = index.repeat(1, q, 1, p)  # [b, q, 1, p]
 

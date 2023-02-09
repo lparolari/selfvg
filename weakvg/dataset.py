@@ -384,6 +384,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
         num_workers=1,
         batch_size=32,
         train_fraction=1,
+        dev=False,
         **kwargs,
     ):
         super().__init__()
@@ -393,6 +394,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
         self.train_fraction = train_fraction
         self.tokenizer = tokenizer
         self.vocab = vocab
+        self.dev = dev
 
         self.train_dataset = None
         self.val_dataset = None
@@ -410,8 +412,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
         }
 
         if stage == "fit" or stage is None:
-            # TODO: replace "val"
-            self.train_dataset = Flickr30kDataset(split="val", **dataset_kwargs)
+            self.train_dataset = Flickr30kDataset(split="val" if self.dev else "train", **dataset_kwargs)
             self.val_dataset = Flickr30kDataset(split="val", **dataset_kwargs)
 
         if stage == "test" or stage is None:

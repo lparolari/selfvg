@@ -48,6 +48,7 @@ class Flickr30kDatum:
     def get_sentence(self, sentence_id, *, return_ann=False) -> str:
         sentence_ann = self._sentences_ann[sentence_id]
         sentence = self._remove_sentence_ann(sentence_ann)
+        sentence = self._process_text(sentence)
 
         if return_ann:
             return sentence, sentence_ann
@@ -69,6 +70,7 @@ class Flickr30kDatum:
         ]
 
         queries = [self._extract_phrase(query_ann) for query_ann in queries_ann]
+        queries = [self._process_text(query) for query in queries]
 
         a_slice = slice(query_id, query_id and query_id + 1)
 
@@ -230,6 +232,9 @@ class Flickr30kDatum:
 
         return int(first_match)
 
+    @staticmethod
+    def _process_text(text: str) -> str:
+        return text.lower()
 
 class Flickr30kDataset(Dataset):
     def __init__(self, split, data_dir, tokenizer, vocab):

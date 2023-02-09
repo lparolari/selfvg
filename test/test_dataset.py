@@ -55,9 +55,7 @@ class TestFlickr30kDatum(unittest.TestCase):
     }
 
     def test_get_sentences_ann(self):
-        sample = Flickr30kDatum(
-            92679312, data_dir="data/flickr30k", precomputed=self.precomputed
-        )
+        sample = self._make_sample()
 
         sentences_ann = sample.get_sentences_ann()
 
@@ -68,7 +66,7 @@ class TestFlickr30kDatum(unittest.TestCase):
         )
 
     def test_get_sentence(self):
-        sample = self.make_sample()
+        sample = self._make_sample()
 
         sentence, sentence_ann = sample.get_sentence(0, return_ann=True)
 
@@ -83,7 +81,7 @@ class TestFlickr30kDatum(unittest.TestCase):
         )
 
     def test_get_queries(self):
-        sample = self.make_sample()
+        sample = self._make_sample()
 
         queries, queries_ann = sample.get_queries(0, return_ann=True)
 
@@ -97,7 +95,7 @@ class TestFlickr30kDatum(unittest.TestCase):
         self.assertEqual(first_query_ann, "/EN#283585/people A young white boy")
 
     def test_get_targets(self):
-        sample = self.make_sample()
+        sample = self._make_sample()
 
         # fmt: off
         target_283585 = [[8, 73, 286, 484, ]]
@@ -118,17 +116,17 @@ class TestFlickr30kDatum(unittest.TestCase):
         self.assertListEqual(sample.get_targets(0), targets)
 
     def test_get_image_w(self):
-        sample = self.make_sample()
+        sample = self._make_sample()
 
         self.assertEqual(sample.get_image_w(), 500)
 
     def test_get_image_h(self):
-        sample = self.make_sample()
+        sample = self._make_sample()
 
         self.assertEqual(sample.get_image_h(), 486)
 
     def test_get_proposals(self):
-        sample = self.make_sample()
+        sample = self._make_sample()
 
         proposals = [
             [56, 0, 499, 485],
@@ -169,7 +167,7 @@ class TestFlickr30kDatum(unittest.TestCase):
         self.assertListEqual(sample.get_proposals(), proposals)
 
     def test_get_classes(self):
-        sample = self.make_sample()
+        sample = self._make_sample()
 
         classes = [
             "man",
@@ -210,7 +208,7 @@ class TestFlickr30kDatum(unittest.TestCase):
         self.assertListEqual(sample.get_classes(), classes)
 
     def test_get_attrs(self):
-        sample = self.make_sample()
+        sample = self._make_sample()
 
         attrs = [
             "white",
@@ -251,7 +249,7 @@ class TestFlickr30kDatum(unittest.TestCase):
         self.assertListEqual(sample.get_attrs(), attrs)
 
     def test_get_proposals_feat(self):
-        sample = self.make_sample()
+        sample = self._make_sample()
 
         # identifier 92679312 --> imgid2idx --> idx 925
         # idx 925 --> pos_bboxes --> pos [37497, 37530]
@@ -261,7 +259,7 @@ class TestFlickr30kDatum(unittest.TestCase):
 
         self.assertEqual(sample.get_proposals_feat().shape, proposals_feat_shape)
 
-    def make_sample(self):
+    def _make_sample(self):
         return Flickr30kDatum(
             92679312, data_dir="data/flickr30k", precomputed=self.precomputed
         )

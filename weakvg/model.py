@@ -16,7 +16,7 @@ class MyModel(pl.LightningModule):
         self.prediction_module = PredictionModule(omega=omega)
         self.loss = Loss()
 
-        # self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["wordvec", "vocab"])
 
     def forward(self, x):
         queries = x["queries"]

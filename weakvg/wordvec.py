@@ -89,7 +89,7 @@ def get_wordvec(
     dim=300,
     *,
     cache="data/glove",
-    check_oov: List[str] = [],
+    custom_tokens: List[str] = [],
     return_vocab=True,
 ):
     wordvec = GloVe(name, dim, cache=cache)
@@ -99,10 +99,11 @@ def get_wordvec(
     padding_emb = torch.zeros(1, wordvec.dim)
     wordvec.vectors = torch.cat([padding_emb, wordvec.vectors], dim=0)
 
-    missing = fix_oov(check_oov, wordvec, vocab)
+    missing = fix_oov(custom_tokens, wordvec, vocab)
     fixed = [label for label, alternative in missing if alternative is not None]
 
-    logging.info(f"Found {len(fixed)} oov labels, fixed {len(fixed)}")
+    if len(fixed) > 0:
+        logging.info(f"Found {len(missing)} oov labels, fixed {len(fixed)}")
 
     if return_vocab:
         return wordvec, vocab
@@ -125,3 +126,10 @@ def build_vocab(wordvec):
     vocab.set_default_index(unk_index)
 
     return vocab
+
+
+def get_objects_vocab(path="data/objects_vocab.txt"):
+    with open(path, "r") as f:
+        labels = f.readlines()
+        labels = [label.strip() for label in labels]
+    return labels

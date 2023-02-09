@@ -12,7 +12,7 @@ class MyModel(pl.LightningModule):
         self.we = WordEmbedding(wordvec, vocab)
         self.concept_branch = ConceptBranch(word_embedding=self.we)
         self.visual_branch = VisualBranch()
-        self.textual_branch = TextualBranch()
+        self.textual_branch = TextualBranch(word_embedding=self.we)
         self.prediction_module = PredictionModule(omega=omega)
         self.loss = Loss()
 
@@ -243,17 +243,61 @@ class VisualBranch(nn.Module):
 
 
 class TextualBranch(nn.Module):
-    def __init__(self):
+    def __init__(self, word_embedding):
         super().__init__()
+        self.we = word_embedding
+        self.lstm = nn.LSTM(300, 300)
 
     def forward(self, x):
+        from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+
         queries = x["queries"]
 
         b = queries.shape[0]
         q = queries.shape[1]
+        w = queries.shape[2]
 
         _, is_query = get_queries_mask(queries)
+        n_words, _ = get_queries_count(queries)
 
-        mask = is_query.unsqueeze(-1)  # TODO: temp
+        queries_e = self.we(queries)  # [b, q, w, d]
 
-        return torch.zeros(b, q, 300), mask
+        d = queries_e.shape[-1]
+
+        queries_e = queries_e.view(-1, w, d)
+        queries_e = queries_e.permute(1, 0, 2).contiguous()
+
+        # required on CPU by pytorch, see 
+        # https://pytorch.org/docs/stable/generated/torch.nn.utils.rnn.pack_padded_sequence.html
+        lengths = n_words.view(-1).cpu()
+        lengths = lengths.clamp(min=1)  # elements with 0 are not accepted
+
+        queries_packed = pack_padded_sequence(queries_e, lengths, enforce_sorted=False)
+
+        output, hidden = self.lstm(queries_packed)
+
+        queries_x, lengths = pad_packed_sequence(output) 
+        # queries_x is a tensor with shape [l, b * q, d], where l is the max length 
+        # of the non-padded sequence
+
+        lengths = lengths.to(queries.device)  # back to original device
+
+        # we need to gather the representation of the last word, so we can build an
+        # index based on lengths. for example, if we have a query with length 4, its
+        # index will be 3
+
+        index = lengths - 1  # [b * q]
+        index = index.unsqueeze(0).unsqueeze(-1)  # [1, b * q, 1]
+        index = index.repeat(1, 1, d)  # [1, b * q, d]
+
+        queries_x = queries_x.gather(0, index)  # [1, b * q, d]
+
+        queries_x = queries_x.permute(1, 0, 2).contiguous()  # [b * q, 1, d]
+        queries_x = queries_x.squeeze(1)  # [b * q, d]
+        queries_x = queries_x.view(b, q, d)  # [b, q, d]
+
+        mask = is_query.unsqueeze(-1)
+
+        queries_x  = queries_x.masked_fill(~mask, 0)
+
+        return queries_x, mask

@@ -10,7 +10,7 @@ from weakvg.wordvec import get_wordvec
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    pl.seed_everything(42)
+    pl.seed_everything(42, workers=True)
 
     # wandb.init(project="weakvg", entity="weakvg")
 

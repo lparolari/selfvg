@@ -44,14 +44,28 @@ class MyModel(pl.LightningModule):
             candidates, targets, queries
         )  # TODO: refactor -> avoid passing queries whenever possible
 
-        self.log(
-            "train_acc", acc, on_step=True, on_epoch=True, prog_bar=True, logger=True
-        )
+        self.log("train_loss", loss, prog_bar=False)
+        self.log("train_acc", acc)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
-        return batch
+        queries = batch["queries"]  # [b, q, w]
+        proposals = batch["proposals"]  # [b, p, 4]
+        targets = batch["targets"]  # [b, q, 4]
+
+        scores, mask = self.forward(batch)  # [b, q, b, p]
+
+        loss = self.loss(queries, scores)
+
+        candidates = self.predict_candidates(scores, proposals)  # [b, q, 4]
+
+        acc = self.accuracy(candidates, targets, queries)
+
+        self.log("val_loss", loss, prog_bar=False)
+        self.log("val_acc", acc)
+
+        return loss
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=0.02)

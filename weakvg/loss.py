@@ -12,9 +12,11 @@ class Loss(nn.Module):
         n_words = (queries != 0).sum(-1)  # [b, q]
         is_query = n_words > 0  # [b, q]
         n_queries = is_query.sum(-1).unsqueeze(-1)  # [b, 1]
+        has_query = is_query.any(-1).unsqueeze(-1)  # [b, 1]
 
         scores, _ = scores.max(-1)  # [b, q, b]
         scores = scores.sum(-2) / n_queries  # [b, b]
+        scores = scores.masked_fill(~has_query, 0)
 
         targets = torch.eye(b)  # [b, b]
         targets = targets.argmax(-1)  # [b]

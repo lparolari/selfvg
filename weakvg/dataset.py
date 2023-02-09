@@ -1,15 +1,20 @@
-import torch
-import logging
 import os
-import pytorch_lightning as pl
-import json
-import pickle
-import h5py
-import numpy as np
 import re
+from typing import Any, Dict, List
 
-from typing import List, Tuple, Dict, Any
-from torch.utils.data import Dataset, DataLoader
+import numpy as np
+import pandas as pd
+import pytorch_lightning as pl
+import torch
+from torch.utils.data import DataLoader, Dataset
+
+from weakvg.padding import (
+    pad_labels,
+    pad_proposals,
+    pad_queries,
+    pad_sentence,
+    pad_targets,
+)
 from weakvg.repo import (
     ImagesSizeRepository,
     ObjectsDetectionRepository,
@@ -259,10 +264,18 @@ class Flickr30kDataset(Dataset):
         proposals_feat = sample["proposals_feat"]
         targets = self._prepare_targets(sample["targets"])
 
-        assert len(queries) == len(targets), f"Expected length of `targets` to be {len(queries)}, got {len(targets)}"
-        assert len(proposals) == len(labels), f"Expected length of `labels` to be {len(proposals)}, got {len(labels)}"
-        assert len(proposals) == len(attrs), f"Expected length of `attrs` to be {len(proposals)}, got {len(attrs)}"
-        assert len(proposals) == len(proposals_feat), f"Expected length of `proposals_feat` to be {len(proposals)}, got {len(proposals_feat)}"
+        assert len(queries) == len(
+            targets
+        ), f"Expected length of `targets` to be {len(queries)}, got {len(targets)}"
+        assert len(proposals) == len(
+            labels
+        ), f"Expected length of `labels` to be {len(proposals)}, got {len(labels)}"
+        assert len(proposals) == len(
+            attrs
+        ), f"Expected length of `attrs` to be {len(proposals)}, got {len(attrs)}"
+        assert len(proposals) == len(
+            proposals_feat
+        ), f"Expected length of `proposals_feat` to be {len(proposals)}, got {len(proposals_feat)}"
 
         return {
             "meta": meta,
@@ -443,9 +456,6 @@ class Flickr30kDataModule(pl.LightningDataModule):
 
 
 def collate_fn(batch):
-    import pandas as pd
-    from weakvg.padding import pad_sentence, pad_queries, pad_proposals, pad_targets
-
     sentence_max_length = 32
     query_max_length = 12
     proposal_max_length = 100
@@ -459,8 +469,8 @@ def collate_fn(batch):
         "image_w": torch.tensor(batch["image_w"]),
         "image_h": torch.tensor(batch["image_h"]),
         "proposals": pad_proposals(batch["proposals"], proposal_max_length),
-        "labels": pad_proposals(batch["labels"], proposal_max_length),
-        "attrs": pad_proposals(batch["attrs"], proposal_max_length),
+        "labels": pad_labels(batch["labels"], proposal_max_length),
+        "attrs": pad_labels(batch["attrs"], proposal_max_length),
         "proposals_feat": pad_proposals(batch["proposals_feat"], proposal_max_length),
         "targets": pad_targets(batch["targets"]),
     }

@@ -53,7 +53,6 @@ def get_logger(args):
             project="weakly_guys",
             entity="weakvg",
             log_model=True,
-            save_dir="output",
             name=name,
             settings=wandb.Settings(start_method="fork"),
         )

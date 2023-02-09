@@ -1,0 +1,11 @@
+h5py
+numpy
+pandas
+torch
+torchtext
+texchvision
+torchmetrics
+wandb
+pyspellchecker
+pytorch-lightning
+pytest

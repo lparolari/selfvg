@@ -3,7 +3,7 @@ numpy
 pandas
 torch
 torchtext
-texchvision
+torchvision
 torchmetrics
 wandb
 pyspellchecker

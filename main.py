@@ -6,6 +6,7 @@ from torchtext.data.utils import get_tokenizer
 from weakvg.dataset import Flickr30kDataModule
 from weakvg.model import MyModel
 from weakvg.wordvec import get_wordvec, get_objects_vocab
+from weakvg.cli import get_args, get_logger
 
 
 def main():
@@ -13,23 +14,18 @@ def main():
 
     pl.seed_everything(42, workers=True)
 
-    # wandb.init(project="weakvg", entity="weakvg")
-
-    # wandb_logger = pl.loggers.WandbLogger(
-    #     project="weakvg",
-    #     entity="weakvg",
-    #     log_model=True,
-    #     save_dir="data/wandb",
-    # )
+    args = get_args()
+    logger = get_logger(args)
 
     tokenizer = get_tokenizer("basic_english")
     wordvec, vocab = get_wordvec(custom_tokens=get_objects_vocab())
 
     dm = Flickr30kDataModule(
         data_dir="data/flickr30k",
-        batch_size=4,
-        num_workers=1,
-        train_fraction=1.0,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        train_fraction=args.train_fraction,
+        dev=args.dev,
         tokenizer=tokenizer,
         vocab=vocab,
     )
@@ -37,9 +33,10 @@ def main():
     model = MyModel(wordvec, vocab)
 
     trainer = pl.Trainer(
-        accelerator="gpu",
-        devices=1,
-        max_epochs=10,
+        accelerator=args.accelerator,
+        devices=args.devices,
+        max_epochs=args.max_epochs,
+        logger=logger,
     )
 
     trainer.fit(model, dm)

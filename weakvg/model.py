@@ -7,26 +7,48 @@ from weakvg.utils import iou
 
 
 class MyModel(pl.LightningModule):
-    def __init__(self, wordvec, vocab) -> None:
+    def __init__(self, wordvec, vocab, omega=0.5) -> None:
         super().__init__()
         self.we = WordEmbedding(wordvec, vocab)
-        # self.linear = torch.nn.Linear(10, 10)
-        self.concept = ConceptModel(word_embedding=self.we)
-        self.softmax = nn.Softmax(dim=-1)
+        self.concept_branch = ConceptBranch(word_embedding=self.we)
+        self.visual_branch = VisualBranch()
+        self.textual_branch = TextualBranch()
+        self.prediction_module = PredictionModule(omega=omega)
         self.loss = Loss()
 
         # self.save_hyperparameters()
 
     def forward(self, x):
-        logits, mask = self.concept(x)
+        queries = x["queries"]
+        proposals = x["proposals"]
 
-        # -1e8 is required to makes the softmax output 0 as probability for
-        # masked values
-        logits = logits.masked_fill(~mask, -1e8)  # [b, q, b, p]
+        b = queries.shape[0]
+        q = queries.shape[1]
+        p = proposals.shape[1]
 
-        scores = self.softmax(logits)  # [b, q, b, p]
+        concepts_pred, concepts_mask = self.concept_branch(x)  # [b, q, b, p]
 
-        return scores, mask
+        viz, viz_mask = self.visual_branch(x)  # [b, p, d], [b, p, 1]
+        viz = viz.unsqueeze(0).unsqueeze(0).repeat(b, q, 1, 1, 1)  # [b, q, b, p, d]
+        viz_mask = (
+            viz_mask.unsqueeze(0).unsqueeze(0).squeeze(-1).repeat(b, q, 1, 1)
+        )  # [b, q, b, p]
+
+        tex, tex_mask = self.textual_branch(x)  # [b, q, d], [b, q, 1]
+        tex = tex.unsqueeze(2).unsqueeze(2).repeat(1, 1, b, p, 1)  # [b, q, b, p, d]
+        tex_mask = tex_mask.unsqueeze(-1).repeat(1, 1, b, p)  # [b, q, b, p]
+
+        network_pred = torch.cosine_similarity(viz, tex, dim=-1)  # [b, q, b, p]
+        network_mask = viz_mask & tex_mask  # [b, q, b, p]
+
+        return self.prediction_module(
+            {
+                "network_pred": network_pred,
+                "network_mask": network_mask,
+                "concepts_pred": concepts_pred,
+                "concepts_mask": concepts_mask,
+            }
+        )
 
     def training_step(self, batch, batch_idx):
         queries = batch["queries"]  # [b, q, w]
@@ -36,7 +58,6 @@ class MyModel(pl.LightningModule):
         scores, mask = self.forward(batch)  # [b, q, b, p]
 
         loss = self.loss(queries, scores)
-        loss.requires_grad_()  # TODO: remove this (current workaround for https://discuss.pytorch.org/t/why-do-i-get-loss-does-not-require-grad-and-does-not-have-a-grad-fn/53145)
 
         candidates = self.predict_candidates(scores, proposals)  # [b, q, 4]
 
@@ -44,8 +65,8 @@ class MyModel(pl.LightningModule):
             candidates, targets, queries
         )  # TODO: refactor -> avoid passing queries whenever possible
 
-        self.log("train_loss", loss, prog_bar=False)
-        self.log("train_acc", acc)
+        self.log("train_loss", loss)
+        self.log("train_acc", acc, prog_bar=True)
 
         return loss
 
@@ -62,13 +83,13 @@ class MyModel(pl.LightningModule):
 
         acc = self.accuracy(candidates, targets, queries)
 
-        self.log("val_loss", loss, prog_bar=False)
-        self.log("val_acc", acc)
+        self.log("val_loss", loss)
+        self.log("val_acc", acc, prog_bar=True)
 
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.02)
+        return torch.optim.Adam(self.parameters(), lr=1e-5)
 
     def predict_candidates(self, scores, proposals):
         # scores: [b, q, b, p]
@@ -129,6 +150,31 @@ def get_queries_count(queries):
     return n_words, n_queries
 
 
+class PredictionModule(nn.Module):
+    def __init__(self, omega):
+        super().__init__()
+        self.softmax = nn.Softmax(dim=-1)
+        self.omega = omega
+
+    def forward(self, x):
+        concepts_pred = x["concepts_pred"]  # [b, q, b, p]
+        concepts_mask = x["concepts_mask"]  # [b, q, b, p]
+        network_pred = x["network_pred"]  # [b, q, b, p]
+        network_mask = x["network_mask"]  # [b, q, b, p]
+
+        # -1e8 is required to makes the softmax output 0 as probability for
+        # masked values
+        concepts_pred = concepts_pred.masked_fill(~concepts_mask, -1e8)  # [b, q, b, p]
+        network_pred = network_pred.masked_fill(~network_mask, -1e8)  # [b, p, b, p]
+
+        network_contrib = self.omega * self.softmax(network_pred)  # [b, q, b, p]
+        concept_contrib = (1 - self.omega) * self.softmax(concepts_pred)  # [b, q, b, p]
+
+        scores = network_contrib + concept_contrib  # [b, q, b, p]
+
+        return scores, concepts_mask
+
+
 class WordEmbedding(nn.Module):
     def __init__(self, wordvec, vocab, *, freeze=True):
         super().__init__()
@@ -141,7 +187,7 @@ class WordEmbedding(nn.Module):
         return self.embedding(x)
 
 
-class ConceptModel(nn.Module):
+class ConceptBranch(nn.Module):
     def __init__(self, word_embedding):
         super().__init__()
         self.we = word_embedding
@@ -168,3 +214,46 @@ class ConceptModel(nn.Module):
         mask = has_query & has_label  # [b, q, b, p]
 
         return sim, mask
+
+
+class VisualBranch(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.fc = nn.Linear(2048, 300)
+        self.act = nn.LeakyReLU()
+
+        self._init_weights()
+
+    def forward(self, x):
+        proposals = x["proposals"]  # [b, p, 4]
+        proposals_feat = x["proposals_feat"]  # [b, p, v]
+
+        mask = proposals.greater(0).any(-1).unsqueeze(-1)  # [b, p, 1]
+
+        fusion = self.fc(proposals_feat)
+        fusion = self.act(fusion)
+        fusion = fusion.masked_fill(~mask, 0)
+
+        return fusion, mask
+
+    def _init_weights(self):
+        nn.init.xavier_normal_(self.fc.weight)
+        nn.init.zeros_(self.fc.bias)
+
+
+class TextualBranch(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        queries = x["queries"]
+
+        b = queries.shape[0]
+        q = queries.shape[1]
+
+        _, is_query = get_queries_mask(queries)
+
+        mask = is_query.unsqueeze(-1)  # TODO: temp
+
+        return torch.zeros(b, q, 300), mask

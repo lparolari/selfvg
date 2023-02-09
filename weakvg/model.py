@@ -14,6 +14,8 @@ class MyModel(pl.LightningModule):
         self.softmax = nn.Softmax(dim=-1)
         self.loss = Loss()
 
+        # self.save_hyperparameters()
+
     def forward(self, x):
         logits, mask = self.concept(x)
 
@@ -27,25 +29,72 @@ class MyModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         queries = batch["queries"]  # [b, q, w]
+        proposals = batch['proposals']  # [b, p, 4]
+        targets = batch['targets']  # [b, q, 4]
+   
+        scores, mask = self.forward(batch)  # [b, q, b, p]
 
-        b = queries.shape[0]
-
-        n_words = (queries != 0).sum(-1)  # [b, q]
-        n_queries = n_words.sum(-1).unsqueeze(-1)  # [b, 1]
-
-        scores, mask = self.forward(batch)
-
-        scores, _ = scores.max(-1)  # [b, q, b]
-
-        scores = scores.sum(-2) / n_queries  # [b, b]
-
-        targets = torch.eye(b)  # [b, b]
-        targets = targets.argmax(-1)  # [b]
-
-        loss = self.loss(scores, targets)
+        loss = self.loss(queries, scores)
         loss.requires_grad_()  # TODO: remove this (current workaround for https://discuss.pytorch.org/t/why-do-i-get-loss-does-not-require-grad-and-does-not-have-a-grad-fn/53145)
 
+        acc = self.accuracy(scores, proposals, targets, queries)  # TODO: refactor -> avoid passing queries whenever possible
+    
+        self.log("train_acc", acc, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
         return loss
+
+    def accuracy(self, scores, proposals, targets, queries):
+
+        # TODO: this may be called `predict_step` (pl hook)
+        b = scores.shape[0]
+        q = scores.shape[1]
+        p = scores.shape[3]
+
+        index = torch.arange(b)  # [b]
+        index = index.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)  # [b, 1, 1, 1]
+        index = index.repeat(1, q, 1, p)  # [b, q, 1, p]
+
+        scores = scores.gather(-2, index).squeeze(-2)  # [b, q, p]
+
+        pred = scores.argmax(-1).unsqueeze(-1).repeat(1, 1, 4)  # [b, q, 4]
+
+        proposals = proposals.gather(-2, pred)  # [b, q, 4]
+
+        targets  # [b, q, 4]
+
+        # TODO: the following is a metric (unrelated to te computation of predictions)
+        iou_threshold = 0.5
+
+        from torchvision.ops import box_iou
+        # iou_score = torchvision.ops.box_iou(proposals.view(-1, 4), targets.view(-1, 4)).view(b,q,b,q)
+
+        # i1 = torch.arange(q).unsqueeze(0).unsqueeze(0).unsqueeze(0).repeat(b, 1, b, q) # [b, 1, b, q]
+
+        # iou_score = iou_score.gather(1, i1).squeeze(1) # [b, b, q]
+
+        # i2 = torch.arange(b)
+
+        iou_score = box_iou(proposals.view(-1, 4), targets.view(-1, 4))#  [b * q, b * q]
+
+        index = torch.arange(b * q).unsqueeze(-1)  # [b * q, 1]
+
+        iou_score = iou_score.gather(-1, index)  # [b * q, 1]
+
+        iou_score = iou_score.view(b, q)  # [b, q]
+
+        matches = iou_score >= iou_threshold  # [b, q]
+
+        # mask as zero padding queries
+        n_words = (queries != 0).sum(-1)  # [b, q]
+        is_query = n_words > 0  # [b, q]
+        n_queries = is_query.sum(-1).unsqueeze(-1)  # [b, 1]
+       
+
+        matches = matches.masked_fill(~is_query, False)
+
+        acc = matches.sum() / n_queries.sum()
+
+        return acc
 
     def validation_step(self, batch, batch_idx):
         return batch

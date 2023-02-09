@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     dm = Flickr30kDataModule(
         data_dir="data/flickr30k",
-        batch_size=1,
+        batch_size=4,
         num_workers=1,
         train_fraction=1.0,
         tokenizer=tokenizer,

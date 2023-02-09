@@ -50,8 +50,8 @@ def get_logger(args):
         import wandb
 
         return pl.loggers.WandbLogger(
-            project="weakly_guys",
-            entity="weakvg",
+            project="weakvg",
+            entity="weakly_guys",
             log_model=True,
             name=name,
             settings=wandb.Settings(start_method="fork"),

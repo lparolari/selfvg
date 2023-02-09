@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 
 from weakvg.loss import Loss
+from weakvg.utils import iou
 
 
 class MyModel(pl.LightningModule):
@@ -29,23 +30,36 @@ class MyModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         queries = batch["queries"]  # [b, q, w]
-        proposals = batch['proposals']  # [b, p, 4]
-        targets = batch['targets']  # [b, q, 4]
-   
+        proposals = batch["proposals"]  # [b, p, 4]
+        targets = batch["targets"]  # [b, q, 4]
+
         scores, mask = self.forward(batch)  # [b, q, b, p]
 
         loss = self.loss(queries, scores)
         loss.requires_grad_()  # TODO: remove this (current workaround for https://discuss.pytorch.org/t/why-do-i-get-loss-does-not-require-grad-and-does-not-have-a-grad-fn/53145)
 
-        acc = self.accuracy(scores, proposals, targets, queries)  # TODO: refactor -> avoid passing queries whenever possible
-    
-        self.log("train_acc", acc, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        candidates = self.predict_candidates(scores, proposals)  # [b, q, 4]
+
+        acc = self.accuracy(
+            candidates, targets, queries
+        )  # TODO: refactor -> avoid passing queries whenever possible
+
+        self.log(
+            "train_acc", acc, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
 
         return loss
 
-    def accuracy(self, scores, proposals, targets, queries):
+    def validation_step(self, batch, batch_idx):
+        return batch
 
-        # TODO: this may be called `predict_step` (pl hook)
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=0.02)
+
+    def predict_candidates(self, scores, proposals):
+        # scores: [b, q, b, p]
+        # proposals: [b, p, 4]
+
         b = scores.shape[0]
         q = scores.shape[1]
         p = scores.shape[3]
@@ -56,51 +70,49 @@ class MyModel(pl.LightningModule):
 
         scores = scores.gather(-2, index).squeeze(-2)  # [b, q, p]
 
-        pred = scores.argmax(-1).unsqueeze(-1).repeat(1, 1, 4)  # [b, q, 4]
+        predictions = scores.argmax(-1).unsqueeze(-1).repeat(1, 1, 4)  # [b, q, 4]
 
-        proposals = proposals.gather(-2, pred)  # [b, q, 4]
+        candidates = proposals.gather(-2, predictions)  # [b, q, 4]
 
-        targets  # [b, q, 4]
+        return candidates
 
-        # TODO: the following is a metric (unrelated to te computation of predictions)
-        iou_threshold = 0.5
+    def accuracy(self, candidates, targets, queries):
+        # scores: [b, q, b, p]
+        # candidates: [b, p, 4]
+        # targets: [b, q, 4]
+        # queries: [b, q, w]
 
-        from torchvision.ops import box_iou
-        # iou_score = torchvision.ops.box_iou(proposals.view(-1, 4), targets.view(-1, 4)).view(b,q,b,q)
+        thresh = 0.5
 
-        # i1 = torch.arange(q).unsqueeze(0).unsqueeze(0).unsqueeze(0).repeat(b, 1, b, q) # [b, 1, b, q]
+        scores = iou(candidates, targets)  # [b, q]
 
-        # iou_score = iou_score.gather(1, i1).squeeze(1) # [b, b, q]
+        matches = scores >= thresh  # [b, q]
 
-        # i2 = torch.arange(b)
+        # mask padding queries
+        _, is_query = get_queries_mask(queries)  # [b, q, w], [b, q]
+        _, n_queries = get_queries_count(queries)  # [b, q], [b]
 
-        iou_score = box_iou(proposals.view(-1, 4), targets.view(-1, 4))#  [b * q, b * q]
-
-        index = torch.arange(b * q).unsqueeze(-1)  # [b * q, 1]
-
-        iou_score = iou_score.gather(-1, index)  # [b * q, 1]
-
-        iou_score = iou_score.view(b, q)  # [b, q]
-
-        matches = iou_score >= iou_threshold  # [b, q]
-
-        # mask as zero padding queries
-        n_words = (queries != 0).sum(-1)  # [b, q]
-        is_query = n_words > 0  # [b, q]
-        n_queries = is_query.sum(-1).unsqueeze(-1)  # [b, 1]
-       
-
-        matches = matches.masked_fill(~is_query, False)
+        matches = matches.masked_fill(~is_query, False)  # [b, q]
 
         acc = matches.sum() / n_queries.sum()
 
         return acc
 
-    def validation_step(self, batch, batch_idx):
-        return batch
 
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=0.02)
+def get_queries_mask(queries):
+    is_word = queries != 0  # [b, q, w]
+    is_query = is_word.any(-1)  # [b, q]
+
+    return is_word, is_query
+
+
+def get_queries_count(queries):
+    is_word, is_query = get_queries_mask(queries)
+
+    n_words = is_word.sum(-1)  # [b, q]
+    n_queries = is_query.sum(-1)  # [b]
+
+    return n_words, n_queries
 
 
 class WordEmbedding(nn.Module):

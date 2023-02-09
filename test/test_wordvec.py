@@ -1,12 +1,12 @@
 import unittest
 
-from weakvg.wordvec import fix_oov, get_wordvec, network_mask
+from weakvg.wordvec import fix_oov, get_wordvec, get_objects_vocab
 
 
 class WordvecTestCase(unittest.TestCase):
     def test_fix_oov(self):
         wordvec, vocab = get_wordvec(custom_tokens=[])
-        possibly_oov_labels = self._get_objects_vocab()
+        possibly_oov_labels = get_objects_vocab()
 
         missing = fix_oov(possibly_oov_labels, wordvec=wordvec, vocab=vocab)
 
@@ -33,7 +33,7 @@ class WordvecTestCase(unittest.TestCase):
         self.assertEqual(len(wordvec), 400000 + 1)
 
     def test_get_wordvec__custom_tokens(self):
-        wordvec, vocab = get_wordvec(custom_tokens=network_mask())
+        wordvec, vocab = get_wordvec(custom_tokens=get_objects_vocab())
 
         self.assertEqual(
             len(vocab), 400000 + 299 + 1

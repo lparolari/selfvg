@@ -27,18 +27,18 @@ class TestFlickr30kDataset(unittest.TestCase):
     def test_load_samples_val(self):
         dataset = _make_dataset("val")
 
-        self.assertEqual(len(dataset), 5000)
+        self.assertEqual(len(dataset), 4986)
 
     def test_load_samples_test(self):
         dataset = _make_dataset("test")
 
-        self.assertEqual(len(dataset), 5000)
+        self.assertEqual(len(dataset), 4969)
 
     @unittest.skip("Skip train dataset as it is too large")
     def test_load_samples_train(self):
         dataset = _make_dataset("train")
 
-        self.assertEqual(len(dataset), 148915)
+        self.assertEqual(len(dataset), 0)  # TODO: get this number
 
 
 class TestFlickr30kDatum(unittest.TestCase):
@@ -72,7 +72,7 @@ class TestFlickr30kDatum(unittest.TestCase):
 
         self.assertEqual(
             sentence,
-            "A young white boy with short hair smiling into a microphone , standing near a slightly balding white male smiling into a microphone .",
+            "a young white boy with short hair smiling into a microphone , standing near a slightly balding white male smiling into a microphone .",
         )
 
         self.assertEqual(
@@ -91,7 +91,7 @@ class TestFlickr30kDatum(unittest.TestCase):
         first_query = queries[0]
         first_query_ann = queries_ann[0]
 
-        self.assertEqual(first_query, "A young white boy")
+        self.assertEqual(first_query, "a young white boy")
         self.assertEqual(first_query_ann, "/EN#283585/people A young white boy")
 
     def test_get_targets(self):
@@ -279,7 +279,7 @@ class TestFlickr30kDataModule(unittest.TestCase):
 
         test_dl = dm.test_dataloader()
 
-        self.assertEqual(len(test_dl), 5000 / 2)  # 5000 samples / 2 batch size = 2500
+        self.assertEqual(len(test_dl), 2484)  # (5000 samples - some discarded samples)  / 2 batch size
 
         # assert some properties of the batch
 

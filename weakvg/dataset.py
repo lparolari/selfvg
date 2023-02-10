@@ -509,9 +509,9 @@ def collate_fn(batch):
 
     return {
         "meta": torch.tensor(batch["meta"]),
-        "sentence": pad_sentence(batch["sentence"], sentence_max_length),
-        "queries": pad_queries(batch["queries"], query_max_length),
-        "heads": pad_queries(batch["heads"], head_max_length),
+        "sentence": pad_sentence(batch["sentence"], sentence_max_length).long(),
+        "queries": pad_queries(batch["queries"], query_max_length).long(),
+        "heads": pad_queries(batch["heads"], head_max_length).long(),
         "image_w": torch.tensor(batch["image_w"]),
         "image_h": torch.tensor(batch["image_h"]),
         "proposals": pad_proposals(batch["proposals"], proposal_max_length),

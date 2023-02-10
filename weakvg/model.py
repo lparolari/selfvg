@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from weakvg.loss import Loss
-from weakvg.utils import iou
+from weakvg.utils import get_queries_count, get_queries_mask, iou
 
 
 class MyModel(pl.LightningModule):
@@ -134,22 +134,6 @@ class MyModel(pl.LightningModule):
         return acc
 
 
-def get_queries_mask(queries):
-    is_word = queries != 0  # [b, q, w]
-    is_query = is_word.any(-1)  # [b, q]
-
-    return is_word, is_query
-
-
-def get_queries_count(queries):
-    is_word, is_query = get_queries_mask(queries)
-
-    n_words = is_word.sum(-1)  # [b, q]
-    n_queries = is_query.sum(-1)  # [b]
-
-    return n_words, n_queries
-
-
 class PredictionModule(nn.Module):
     def __init__(self, omega):
         super().__init__()
@@ -243,13 +227,13 @@ class VisualBranch(nn.Module):
         fusion = fusion.masked_fill(~mask, 0)
 
         return fusion, mask
-    
+
     def spatial(self, x):
         proposals = x["proposals"]  # [b, p, 4]
         image_w = x["image_w"].unsqueeze(-1)  # [b, 1]
         image_h = x["image_h"].unsqueeze(-1)  # [b, 1]
 
-        x1 = proposals[..., 0] / image_w   # [b, p]
+        x1 = proposals[..., 0] / image_w  # [b, p]
         y1 = proposals[..., 1] / image_h
         x2 = proposals[..., 2] / image_w
         y2 = proposals[..., 3] / image_h
@@ -259,7 +243,7 @@ class VisualBranch(nn.Module):
         spat = torch.stack([x1, y1, x2, y2, area], dim=-1)
 
         return spat
-    
+
     def project(self, proposals_feat, spat):
         viz = torch.cat([proposals_feat, spat], dim=-1)  # [b, p, v + 5]
 
@@ -280,7 +264,8 @@ class TextualBranch(nn.Module):
         self.lstm = nn.LSTM(300, 300)
 
     def forward(self, x):
-        from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+        from torch.nn.utils.rnn import (pack_padded_sequence,
+                                        pad_packed_sequence)
 
         queries = x["queries"]
 
@@ -298,7 +283,7 @@ class TextualBranch(nn.Module):
         queries_e = queries_e.view(-1, w, d)
         queries_e = queries_e.permute(1, 0, 2).contiguous()
 
-        # required on CPU by pytorch, see 
+        # required on CPU by pytorch, see
         # https://pytorch.org/docs/stable/generated/torch.nn.utils.rnn.pack_padded_sequence.html
         lengths = n_words.view(-1).cpu()
         lengths = lengths.clamp(min=1)  # elements with 0 are not accepted
@@ -307,8 +292,8 @@ class TextualBranch(nn.Module):
 
         output, hidden = self.lstm(queries_packed)
 
-        queries_x, lengths = pad_packed_sequence(output) 
-        # queries_x is a tensor with shape [l, b * q, d], where l is the max length 
+        queries_x, lengths = pad_packed_sequence(output)
+        # queries_x is a tensor with shape [l, b * q, d], where l is the max length
         # of the non-padded sequence
 
         lengths = lengths.to(queries.device)  # back to original device
@@ -329,6 +314,6 @@ class TextualBranch(nn.Module):
 
         mask = is_query.unsqueeze(-1)
 
-        queries_x  = queries_x.masked_fill(~mask, 0)
+        queries_x = queries_x.masked_fill(~mask, 0)
 
         return queries_x, mask

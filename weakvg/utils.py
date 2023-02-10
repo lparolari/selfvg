@@ -31,3 +31,31 @@ def iou(candidates, targets):
     scores = scores.view(b, q)  # [b, q]
 
     return scores
+
+
+def get_queries_mask(queries):
+    """
+    Return a mask for the words and queries in a batch of queries.
+
+    :param queries: A tensor with shape `[b, q, w]`
+    :return: A tuple of tensors `([b, q, w], [b, q])` for is_word, is_query
+    """
+    is_word = queries != 0  # [b, q, w]
+    is_query = is_word.any(-1)  # [b, q]
+
+    return is_word, is_query
+
+
+def get_queries_count(queries):
+    """
+    Return the number of words and queries in a batch of queries.
+
+    :param queries: A tensor with shape `[b, q, w]`
+    :return: A tuple of tensors `([b, q], [b])` for n_words, n_queries
+    """
+    is_word, is_query = get_queries_mask(queries)
+
+    n_words = is_word.sum(-1)  # [b, q]
+    n_queries = is_query.sum(-1)  # [b]
+
+    return n_words, n_queries

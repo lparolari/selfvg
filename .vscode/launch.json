@@ -9,6 +9,7 @@
       "type": "python",
       "request": "launch",
       "program": "main.py",
+      "args": ["--dev", "--batch_size=4", "--accelerator=cpu"],
       "console": "integratedTerminal",
       "justMyCode": true
     }

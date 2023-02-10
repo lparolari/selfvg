@@ -11,7 +11,7 @@ class MyModel(pl.LightningModule):
         super().__init__()
         self.we = WordEmbedding(wordvec, vocab)
         self.concept_branch = ConceptBranch(word_embedding=self.we)
-        self.visual_branch = VisualBranch()
+        self.visual_branch = VisualBranch(word_embedding=self.we)
         self.textual_branch = TextualBranch(word_embedding=self.we)
         self.prediction_module = PredictionModule(omega=omega)
         self.loss = Loss()
@@ -217,10 +217,12 @@ class ConceptBranch(nn.Module):
 
 
 class VisualBranch(nn.Module):
-    def __init__(self):
+    def __init__(self, word_embedding):
         super().__init__()
 
-        self.fc = nn.Linear(2048, 300)
+        self.we = word_embedding
+
+        self.fc = nn.Linear(2048 + 5, 300)
         self.act = nn.LeakyReLU()
 
         self._init_weights()
@@ -228,14 +230,43 @@ class VisualBranch(nn.Module):
     def forward(self, x):
         proposals = x["proposals"]  # [b, p, 4]
         proposals_feat = x["proposals_feat"]  # [b, p, v]
+        labels = x["labels"]  # [b, p]
 
         mask = proposals.greater(0).any(-1).unsqueeze(-1)  # [b, p, 1]
 
-        fusion = self.fc(proposals_feat)
-        fusion = self.act(fusion)
+        labels_e = self.we(labels)  # [b, p, d]
+        spat = self.spatial(x)  # [b, p, 5]
+
+        proj = self.project(proposals_feat, spat)  # [b, p, d]
+        fusion = proj + labels_e  # [b, p, d]
+
         fusion = fusion.masked_fill(~mask, 0)
 
         return fusion, mask
+    
+    def spatial(self, x):
+        proposals = x["proposals"]  # [b, p, 4]
+        image_w = x["image_w"].unsqueeze(-1)  # [b, 1]
+        image_h = x["image_h"].unsqueeze(-1)  # [b, 1]
+
+        x1 = proposals[..., 0] / image_w   # [b, p]
+        y1 = proposals[..., 1] / image_h
+        x2 = proposals[..., 2] / image_w
+        y2 = proposals[..., 3] / image_h
+
+        area = (x2 - x1) * (y2 - y1)  # [b, p]
+
+        spat = torch.stack([x1, y1, x2, y2, area], dim=-1)
+
+        return spat
+    
+    def project(self, proposals_feat, spat):
+        viz = torch.cat([proposals_feat, spat], dim=-1)  # [b, p, v + 5]
+
+        proj = self.fc(viz)  # [b, p, d]
+        proj = self.act(proj)
+
+        return proj
 
     def _init_weights(self):
         nn.init.xavier_normal_(self.fc.weight)

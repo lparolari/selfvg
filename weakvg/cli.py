@@ -19,7 +19,7 @@ def get_args(verbose=True):
     parser.add_argument("--devices", type=int, default=1)
     parser.add_argument("--accelerator", type=str, default="gpu")
     parser.add_argument(
-        "--logger", type=str, choices=["wandb", "tensorboard"], default="tensorboard"
+        "--logger", type=str, choices=["wandb", "tensorboard"], default="wandb"
     )
     parser.add_argument("--max_epochs", type=int, default=25)
 
@@ -58,3 +58,17 @@ def get_logger(args):
         )
 
     return None
+
+
+def get_callbacks(args):
+    model_checkpoint_clbk = pl.callbacks.model_checkpoint.ModelCheckpoint(
+        dirpath="output",
+        monitor="val_acc",
+        mode="max",
+    )
+
+    callbacks = [
+        model_checkpoint_clbk,
+    ]
+
+    return callbacks

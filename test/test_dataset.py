@@ -17,6 +17,12 @@ def _get_vocab():
     return vocab
 
 
+def _get_nlp():
+    from weakvg.wordvec import get_nlp
+
+    return get_nlp()
+
+
 def _make_dataset(split):
     return Flickr30kDataset(
         split, data_dir="data/flickr30k", tokenizer=_get_tokenizer(), vocab=_get_vocab()
@@ -273,6 +279,7 @@ class TestFlickr30kDataModule(unittest.TestCase):
             num_workers=1,
             tokenizer=_get_tokenizer(),
             vocab=_get_vocab(),
+            nlp=_get_nlp(),
         )
 
         dm.setup("test")  # should load test dataset

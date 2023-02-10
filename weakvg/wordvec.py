@@ -133,3 +133,10 @@ def get_objects_vocab(path="data/objects_vocab.txt"):
         labels = f.readlines()
         labels = [label.strip() for label in labels]
     return labels
+
+
+def get_nlp():
+    import spacy
+
+    nlp = spacy.load("en_core_web_sm")
+    return nlp

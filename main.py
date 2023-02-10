@@ -5,7 +5,7 @@ from torchtext.data.utils import get_tokenizer
 
 from weakvg.dataset import Flickr30kDataModule
 from weakvg.model import MyModel
-from weakvg.wordvec import get_wordvec, get_objects_vocab
+from weakvg.wordvec import get_wordvec, get_objects_vocab, get_nlp
 from weakvg.cli import get_args, get_logger
 
 
@@ -19,6 +19,7 @@ def main():
 
     tokenizer = get_tokenizer("basic_english")
     wordvec, vocab = get_wordvec(custom_tokens=get_objects_vocab())
+    nlp = get_nlp()
 
     dm = Flickr30kDataModule(
         data_dir="data/flickr30k",
@@ -28,6 +29,7 @@ def main():
         dev=args.dev,
         tokenizer=tokenizer,
         vocab=vocab,
+        nlp=nlp,
     )
 
     model = MyModel(wordvec, vocab)

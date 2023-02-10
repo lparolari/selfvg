@@ -27,11 +27,12 @@ Box = List[int]
 
 class Flickr30kDatum:
     def __init__(
-        self, identifier: int, *, data_dir: str, precomputed: Dict[str, Dict[int, Any]]
+        self, identifier: int, *, data_dir: str, precomputed: Dict[str, Dict[int, Any]], nlp=None
     ):
         self.identifier = identifier
         self.data_dir = data_dir
         self.precomputed = precomputed
+        self.nlp = nlp
 
         self._sentences_ann = None
         self._targets_ann = None
@@ -78,6 +79,30 @@ class Flickr30kDatum:
             return queries[a_slice], queries_ann[a_slice]
 
         return queries[a_slice]
+
+    def get_heads(self, sentence_id, query_id=None) -> List[str]:
+        a_slice = slice(query_id, query_id and query_id + 1)
+        queries = self.get_queries(sentence_id, query_id)
+
+        if not self.nlp:
+            # as fallback we return the full query, which, instead
+            # of being a specific part of the query is the query itself
+            return queries
+
+        def get_head(cs) -> str:
+            heads = [c.root.text for c in cs]
+            head = " ".join(heads)
+            return head
+
+        docs = [self.nlp(query) for query in queries]
+        chunks = [doc.noun_chunks for doc in docs]
+        heads = [get_head(cs) for cs in chunks]
+
+        fallbacks = [doc[-1].text for doc in docs]
+
+        heads = [head if not head else fallback for head, fallback in zip(heads, fallbacks)]
+
+        return heads[a_slice]
 
     def get_targets(self, sentence_id) -> List[List[int]]:
         targets_ann = self._targets_ann
@@ -129,6 +154,7 @@ class Flickr30kDatum:
                 # text
                 "sentence": self.get_sentence(sentence_id),
                 "queries": self.get_queries(sentence_id),
+                "heads": self.get_heads(sentence_id),
                 # image
                 "image_w": self.get_image_w(),
                 "image_h": self.get_image_h(),
@@ -236,12 +262,14 @@ class Flickr30kDatum:
     def _process_text(text: str) -> str:
         return text.lower()
 
+
 class Flickr30kDataset(Dataset):
-    def __init__(self, split, data_dir, tokenizer, vocab):
+    def __init__(self, split, data_dir, tokenizer, vocab, nlp=None):
         self.data_dir = data_dir
         self.split = split
         self.tokenizer = tokenizer
         self.vocab = vocab
+        self.nlp = nlp
 
         self.identifiers = None
         """A list of numbers that identify each sample"""
@@ -261,6 +289,7 @@ class Flickr30kDataset(Dataset):
         meta = [idx, sample["identifier"]]
         sentence = self._prepare_sentence(sample["sentence"])
         queries = self._prepare_queries(sample["queries"])
+        heads = self._prepare_queries(sample["heads"])
         image_w = sample["image_w"]
         image_h = sample["image_h"]
         proposals = sample["proposals"]
@@ -286,6 +315,7 @@ class Flickr30kDataset(Dataset):
             "meta": meta,
             "sentence": sentence,
             "queries": queries,
+            "heads": heads,
             "image_w": image_w,
             "image_h": image_h,
             "proposals": proposals,
@@ -312,7 +342,10 @@ class Flickr30kDataset(Dataset):
 
         for identifier in self.identifiers:
             for sample in Flickr30kDatum(
-                identifier, data_dir=self.data_dir, precomputed=precomputed
+                identifier,
+                data_dir=self.data_dir,
+                precomputed=precomputed,
+                nlp=self.nlp,
             ):
                 samples.append(sample)
 
@@ -381,6 +414,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
         data_dir,
         tokenizer,
         vocab,
+        nlp,
         num_workers=1,
         batch_size=32,
         train_fraction=1,
@@ -394,6 +428,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
         self.train_fraction = train_fraction
         self.tokenizer = tokenizer
         self.vocab = vocab
+        self.nlp = nlp
         self.dev = dev
 
         self.train_dataset = None
@@ -409,10 +444,13 @@ class Flickr30kDataModule(pl.LightningDataModule):
             "data_dir": self.data_dir,
             "tokenizer": self.tokenizer,
             "vocab": self.vocab,
+            "nlp": self.nlp,
         }
 
         if stage == "fit" or stage is None:
-            self.train_dataset = Flickr30kDataset(split="val" if self.dev else "train", **dataset_kwargs)
+            self.train_dataset = Flickr30kDataset(
+                split="val" if self.dev else "train", **dataset_kwargs
+            )
             self.val_dataset = Flickr30kDataset(split="val", **dataset_kwargs)
 
         if stage == "test" or stage is None:
@@ -464,6 +502,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
 def collate_fn(batch):
     sentence_max_length = 32
     query_max_length = 12
+    head_max_length = 5
     proposal_max_length = 100
 
     batch = pd.DataFrame(batch).to_dict(orient="list")
@@ -472,6 +511,7 @@ def collate_fn(batch):
         "meta": torch.tensor(batch["meta"]),
         "sentence": pad_sentence(batch["sentence"], sentence_max_length),
         "queries": pad_queries(batch["queries"], query_max_length),
+        "heads": pad_queries(batch["heads"], head_max_length),
         "image_w": torch.tensor(batch["image_w"]),
         "image_h": torch.tensor(batch["image_h"]),
         "proposals": pad_proposals(batch["proposals"], proposal_max_length),

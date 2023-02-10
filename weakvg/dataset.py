@@ -100,7 +100,7 @@ class Flickr30kDatum:
 
         fallbacks = [doc[-1].text for doc in docs]
 
-        heads = [head if not head else fallback for head, fallback in zip(heads, fallbacks)]
+        heads = [head if head else fallback for head, fallback in zip(heads, fallbacks)]
 
         return heads[a_slice]
 

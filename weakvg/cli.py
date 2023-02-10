@@ -1,11 +1,9 @@
 import argparse
-import json
-import logging
 
 import pytorch_lightning as pl
 
 
-def get_args(verbose=True):
+def get_args():
     parser = argparse.ArgumentParser()
 
     # global params
@@ -13,6 +11,7 @@ def get_args(verbose=True):
     parser.add_argument("--mode", type=str, choices=["train"], default="train")
     parser.add_argument(
         "--dev",
+        default=False,
         action="store_true",
         help="Dev mode uses validation set instead of training set",
     )
@@ -22,16 +21,25 @@ def get_args(verbose=True):
         "--logger", type=str, choices=["wandb", "tensorboard"], default="wandb"
     )
     parser.add_argument("--max_epochs", type=int, default=25)
+    parser.add_argument(
+        "--task",
+        type=str,
+        default="weak",
+        choices=["weak", "full"],
+        help="Task to perform: `weak` runs the model with weak supervision, while `full` uses supervision",
+    )
 
     # dataset params
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--train_fraction", type=float, default=1.0)
 
-    args = parser.parse_args()
+    # model params
+    parser.add_argument(
+        "--omega", type=float, default=0.5, help="Weight for the network prediction"
+    )
 
-    if verbose:
-        logging.info("Args: " + json.dumps(vars(args), indent=4))
+    args = parser.parse_args()
 
     return args
 

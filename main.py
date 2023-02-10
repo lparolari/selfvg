@@ -1,22 +1,25 @@
+import json
 import logging
 
 import pytorch_lightning as pl
 from torchtext.data.utils import get_tokenizer
 
+from weakvg.cli import get_args, get_callbacks, get_logger
 from weakvg.dataset import Flickr30kDataModule
 from weakvg.model import MyModel
-from weakvg.wordvec import get_wordvec, get_objects_vocab, get_nlp
-from weakvg.cli import get_args, get_logger, get_callbacks
+from weakvg.wordvec import get_nlp, get_objects_vocab, get_wordvec
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
-
-    pl.seed_everything(42, workers=True)
-
     args = get_args()
+
+    logging.basicConfig(level=logging.DEBUG if args.dev else logging.INFO)
+    logging.info("Args: " + json.dumps(vars(args), indent=4))
+
     logger = get_logger(args)
     callbacks = get_callbacks(args)
+
+    pl.seed_everything(42, workers=True)
 
     tokenizer = get_tokenizer("basic_english")
     wordvec, vocab = get_wordvec(custom_tokens=get_objects_vocab())
@@ -33,7 +36,7 @@ def main():
         nlp=nlp,
     )
 
-    model = MyModel(wordvec, vocab)
+    model = MyModel(wordvec, vocab, omega=args.omega, task=args.task)
 
     trainer = pl.Trainer(
         accelerator=args.accelerator,

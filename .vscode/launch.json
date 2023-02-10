@@ -9,9 +9,12 @@
       "type": "python",
       "request": "launch",
       "program": "main.py",
-      "args": ["--dev", "--batch_size=4", "--accelerator=cpu", "--logger=tensorboard"],
+      "args": ["--dev", "--batch_size=4", "--accelerator=cpu", "--logger=tensorboard", "--task=full", "--num_workers=12"],
       "console": "integratedTerminal",
-      "justMyCode": true
+      "justMyCode": true,
+      "env": {
+        "HDF5_USE_FILE_LOCKING": "false"
+      }
     }
   ]
 }

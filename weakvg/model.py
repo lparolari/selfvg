@@ -2,19 +2,23 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 
-from weakvg.loss import Loss
+from weakvg.loss import Loss, LossSupervised
 from weakvg.utils import get_queries_count, get_queries_mask, iou
 
 
 class MyModel(pl.LightningModule):
-    def __init__(self, wordvec, vocab, omega=0.5) -> None:
+    def __init__(self, wordvec, vocab, omega=0.5, task="weak") -> None:
         super().__init__()
         self.we = WordEmbedding(wordvec, vocab)
         self.concept_branch = ConceptBranch(word_embedding=self.we)
         self.visual_branch = VisualBranch(word_embedding=self.we)
         self.textual_branch = TextualBranch(word_embedding=self.we)
         self.prediction_module = PredictionModule(omega=omega)
-        self.loss = Loss()
+
+        if task == "weak":
+            self.loss = Loss()
+        if task == "full":
+            self.loss = LossSupervised()
 
         self.save_hyperparameters(ignore=["wordvec", "vocab"])
 
@@ -57,7 +61,7 @@ class MyModel(pl.LightningModule):
 
         scores, mask = self.forward(batch)  # [b, q, b, p]
 
-        loss = self.loss(queries, scores)
+        loss = self.loss({**batch, "scores": scores})
 
         candidates = self.predict_candidates(scores, proposals)  # [b, q, 4]
 
@@ -77,7 +81,7 @@ class MyModel(pl.LightningModule):
 
         scores, mask = self.forward(batch)  # [b, q, b, p]
 
-        loss = self.loss(queries, scores)
+        loss = self.loss({**batch, "scores": scores})
 
         candidates = self.predict_candidates(scores, proposals)  # [b, q, 4]
 

@@ -80,14 +80,18 @@ class TestVisualBranch(unittest.TestCase):
         )
 
     def test_project(self):
-        proposals_feat = torch.rand(2, 6, 3)  # [b, p, v]
+        # please note that VisualBranch requires the `v` dimension to be 2048,
+        # while last dimension of `spat` need to be 5
+        proposals_feat = torch.rand(2, 6, 2048)  # [b, p, v]
         spat = torch.rand(2, 6, 5).mul(100).long()  # [b, p, 5]
 
         visual_branch = VisualBranch(word_embedding=self.we)
 
         proj = visual_branch.project(proposals_feat, spat)
 
-        self.assertEqual(proj.shape, (2, 6, 8))
+        # the network projects visual features to 300 in order to match
+        # the word embedding dimension
+        self.assertEqual(proj.shape, (2, 6, 300))
 
 
 class TestConceptBranch(unittest.TestCase):

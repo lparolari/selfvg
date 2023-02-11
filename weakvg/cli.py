@@ -7,38 +7,85 @@ import shortuuid
 def get_args():
     parser = argparse.ArgumentParser()
 
-    # global params
-    parser.add_argument("--exp_id", type=str, default=shortuuid.uuid()[:4])
-    parser.add_argument("--mode", type=str, choices=["train"], default="train")
-    parser.add_argument(
-        "--dev",
-        default=False,
-        action="store_true",
-        help="Dev mode uses validation set instead of training set",
+    exp_group = parser.add_argument_group("experiment arguments")
+    exp_group.add_argument(
+        "--exp_id",
+        type=str,
+        default=shortuuid.uuid()[:4],
+        help="Experiment identifier. Default: random",
     )
-    parser.add_argument("--verbose", default=False, action="store_true")
-    parser.add_argument("--devices", type=int, default=1)
-    parser.add_argument("--accelerator", type=str, default="gpu")
-    parser.add_argument(
-        "--logger", type=str, choices=["wandb", "tensorboard"], default="wandb"
+    exp_group.add_argument(
+        "--mode",
+        type=str,
+        choices=["train"],
+        default="train",
+        help="Program mode. Default: train",
     )
-    parser.add_argument("--max_epochs", type=int, default=25)
-    parser.add_argument(
+    exp_group.add_argument(
         "--task",
         type=str,
         default="weak",
         choices=["weak", "full"],
-        help="Task to perform: `weak` runs the model with weak supervision, while `full` uses supervision",
+        help="Model task, weakly- or fully-supervised. Default: weak",
+    )
+    exp_group.add_argument(
+        "--max_epochs",
+        type=int,
+        default=25,
+        help="Maximum number of epochs. Default: 25",
+    )
+    exp_group.add_argument(
+        "--devices", type=int, default=1, help="Number of devices to use. Default: 1"
+    )
+    exp_group.add_argument(
+        "--accelerator",
+        type=str,
+        choices=["cpu", "gpu"],
+        default="gpu",
+        help="Accelerator to use. Default: gpu",
+    )
+    exp_group.add_argument(
+        "--logger",
+        type=str,
+        choices=["wandb", "tensorboard"],
+        default="wandb",
+        help="Logger to use for experiment tracking. Default: wandb",
+    )
+    exp_group.add_argument(
+        "--dev",
+        default=False,
+        action="store_true",
+        help="Dev mode uses validation set instead of training set. Default: false",
+    )
+    exp_group.add_argument(
+        "--verbose",
+        default=False,
+        action="store_true",
+        help="Verbose mode. Default: false",
     )
 
     # dataset params
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--num_workers", type=int, default=4)
-    parser.add_argument("--train_fraction", type=float, default=1.0)
+    dataset_group = parser.add_argument_group("dataset arguments")
+    dataset_group.add_argument(
+        "--batch_size", type=int, default=32, help="Batch size. Default: 32"
+    )
+    dataset_group.add_argument(
+        "--num_workers", type=int, default=4, help="Number of workers. Default: 4"
+    )
+    dataset_group.add_argument(
+        "--train_fraction",
+        type=float,
+        default=1.0,
+        help="Fraction of training set to use. Default: 1.0",
+    )
 
     # model params
-    parser.add_argument(
-        "--omega", type=float, default=0.5, help="Weight for the network prediction"
+    model_group = parser.add_argument_group("dataset arguments")
+    model_group.add_argument(
+        "--omega",
+        type=float,
+        default=0.5,
+        help="Weight for the network prediction. Default: 0.5",
     )
 
     args = parser.parse_args()

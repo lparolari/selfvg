@@ -91,6 +91,9 @@ def get_args():
     model_group.add_argument(
         "--checkpoint", type=str, default=None, help="Checkpoint to load. Default: None"
     )
+    model_group.add_argument(
+        "--neg_selection", type=str, default="random", choices=["random", "textual_sim_max"], help="Strategy for negative example selection. Default: random"
+    )
 
     args = parser.parse_args()
 

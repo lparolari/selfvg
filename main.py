@@ -42,7 +42,13 @@ def main():
         )
         logging.info(f"Loaded model at {args.checkpoint}")
     else:
-        model = MyModel(wordvec, vocab, omega=args.omega, task=args.task)
+        model = MyModel(
+            wordvec,
+            vocab,
+            omega=args.omega,
+            task=args.task,
+            neg_selection=args.neg_selection,
+        )
 
     trainer = pl.Trainer(
         accelerator=args.accelerator,

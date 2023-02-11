@@ -7,7 +7,7 @@ from weakvg.utils import get_queries_count, get_queries_mask, iou
 
 
 class MyModel(pl.LightningModule):
-    def __init__(self, wordvec, vocab, omega=0.5, task="weak") -> None:
+    def __init__(self, wordvec, vocab, omega=0.5, task="weak", neg_selection="random") -> None:
         super().__init__()
         self.we = WordEmbedding(wordvec, vocab)
         self.concept_branch = ConceptBranch(word_embedding=self.we)
@@ -16,7 +16,7 @@ class MyModel(pl.LightningModule):
         self.prediction_module = PredictionModule(omega=omega)
 
         if task == "weak":
-            self.loss = Loss()
+            self.loss = Loss(word_embedding=self.we, neg_selection=neg_selection)
         if task == "full":
             self.loss = LossSupervised()
 

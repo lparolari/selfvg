@@ -49,6 +49,8 @@ def main():
             task=args.task,
             neg_selection=args.neg_selection,
         )
+    
+    logger.watch(model, log="all")
 
     trainer = pl.Trainer(
         accelerator=args.accelerator,

@@ -117,13 +117,17 @@ def get_logger(args):
     if args.logger == "wandb":
         import wandb
 
-        return pl.loggers.WandbLogger(
+        logger = pl.loggers.WandbLogger(
             project="weakvg",
             entity="weakly_guys",
             log_model=False if args.dev else True,
             name=name,
             settings=wandb.Settings(start_method="fork"),
         )
+
+        logger.experiment.config.update(vars(args))
+
+        return logger
 
     return None
 

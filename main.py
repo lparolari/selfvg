@@ -13,7 +13,7 @@ from weakvg.wordvec import get_nlp, get_objects_vocab, get_wordvec
 def main():
     args = get_args()
 
-    logging.basicConfig(level=logging.DEBUG if args.dev else logging.INFO)
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     logging.info("Args: " + json.dumps(vars(args), indent=4))
 
     logger = get_logger(args)

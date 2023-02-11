@@ -16,6 +16,7 @@ def get_args():
         action="store_true",
         help="Dev mode uses validation set instead of training set",
     )
+    parser.add_argument("--verbose", default=False, action="store_true")
     parser.add_argument("--devices", type=int, default=1)
     parser.add_argument("--accelerator", type=str, default="gpu")
     parser.add_argument(

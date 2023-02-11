@@ -16,9 +16,6 @@ def main():
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     logging.info("Args: " + json.dumps(vars(args), indent=4))
 
-    logger = get_logger(args)
-    callbacks = get_callbacks(args)
-
     pl.seed_everything(42, workers=True)
 
     tokenizer = get_tokenizer("basic_english")
@@ -50,7 +47,8 @@ def main():
             neg_selection=args.neg_selection,
         )
     
-    logger.watch(model, log="all")
+    logger = get_logger(args, model)
+    callbacks = get_callbacks(args)
 
     trainer = pl.Trainer(
         accelerator=args.accelerator,

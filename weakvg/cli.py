@@ -104,7 +104,7 @@ def get_args():
     return args
 
 
-def get_logger(args):
+def get_logger(args, model=None):
     name = args.exp_id or None
 
     if args.logger == "tensorboard":
@@ -126,6 +126,9 @@ def get_logger(args):
         )
 
         logger.experiment.config.update(vars(args))
+
+        if model is not None:
+            logger.watch(model, log="all")
 
         return logger
 

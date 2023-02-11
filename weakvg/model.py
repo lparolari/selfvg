@@ -100,6 +100,16 @@ class MyModel(pl.LightningModule):
         self.log("val_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
+    
+    def test_step(self, batch, batch_idx):
+        loss, metrics = self.step(batch, batch_idx)
+
+        acc = metrics["acc"]
+
+        self.log("test_loss", loss, on_step=False, on_epoch=True)
+        self.log("test_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
+
+        return loss
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=1e-5)

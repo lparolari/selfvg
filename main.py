@@ -46,7 +46,11 @@ def main():
         callbacks=callbacks,
     )
 
-    trainer.fit(model, dm)
+    if args.mode == "train":
+        trainer.fit(model, dm)
+
+    if args.mode == "test":
+        trainer.test(model, dm)
 
 
 if __name__ == "__main__":

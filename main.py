@@ -36,7 +36,13 @@ def main():
         nlp=nlp,
     )
 
-    model = MyModel(wordvec, vocab, omega=args.omega, task=args.task)
+    if args.checkpoint:
+        model = MyModel.load_from_checkpoint(
+            args.checkpoint, wordvec=wordvec, vocab=vocab
+        )
+        logging.info(f"Loaded model at {args.checkpoint}")
+    else:
+        model = MyModel(wordvec, vocab, omega=args.omega, task=args.task)
 
     trainer = pl.Trainer(
         accelerator=args.accelerator,

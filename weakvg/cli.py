@@ -87,6 +87,9 @@ def get_args():
         default=0.5,
         help="Weight for the network prediction. Default: 0.5",
     )
+    model_group.add_argument(
+        "--checkpoint", type=str, default=None, help="Checkpoint to load. Default: None"
+    )
 
     args = parser.parse_args()
 

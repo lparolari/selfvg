@@ -88,3 +88,49 @@ class TestVisualBranch(unittest.TestCase):
         proj = visual_branch.project(proposals_feat, spat)
 
         self.assertEqual(proj.shape, (2, 6, 8))
+
+
+class TestConceptBranch(unittest.TestCase):
+    wordvec, vocab = get_wordvec()
+    we = WordEmbedding(wordvec, vocab)
+
+    def test_forward(self):
+        heads = torch.tensor(
+            [
+                self.vocab.lookup_indices("man <unk>".split()),
+                self.vocab.lookup_indices("dog <unk>".split()),
+            ]
+        ).unsqueeze(
+            0
+        )  # [b, q, h] = [1, 2, 2]
+
+        labels = torch.tensor(
+            [
+                self.vocab["person"],
+                self.vocab["dog"],
+                self.vocab["sky"],
+                self.vocab["person"],
+                self.vocab["bird"],
+                self.vocab.get_default_index(),  # pad
+                self.vocab.get_default_index(),  # pad
+                self.vocab.get_default_index(),  # pad
+            ]
+        ).unsqueeze(
+            0
+        )  # [b, p] = [1, 8]
+
+        concept_branch = ConceptBranch(word_embedding=self.we)
+
+        output, mask = concept_branch.forward({"heads": heads, "labels": labels})
+
+        self.assertEqual(mask.shape, (1, 2, 1, 8))
+        self.assertEqual(output.shape, (1, 2, 1, 8))
+
+        q1 = (0, 0, 0)
+        q2 = (0, 1, 0)
+
+        self.assertAlmostEqual(output[q1].argmax().item(), 0)  # also label 4 could be correct, but the argmax selects the first one
+        self.assertAlmostEqual(output[q2].argmax().item(), 1)
+
+        self.assertAlmostEqual(mask[q1].sum(), 5)
+        self.assertAlmostEqual(mask[q2].sum(), 5)

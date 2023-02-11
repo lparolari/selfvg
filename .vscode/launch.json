@@ -9,7 +9,16 @@
       "type": "python",
       "request": "launch",
       "program": "main.py",
-      "args": ["--dev", "--batch_size=4", "--accelerator=cpu", "--logger=wandb", "--task=weak", "--num_workers=12", "--neg_selection=textual_sim_max"],
+      "args": [
+        "--dev",
+        "--batch_size=4",
+        "--accelerator=cpu",
+        "--logger=wandb",
+        "--task=weak",
+        "--num_workers=12",
+        "--neg_selection=textual_sim_max",
+        "--grounding=nn",
+      ],
       "console": "integratedTerminal",
       "justMyCode": true,
       "env": {

@@ -45,6 +45,7 @@ def main():
             omega=args.omega,
             task=args.task,
             neg_selection=args.neg_selection,
+            grounding=args.grounding,
         )
     
     logger = get_logger(args, model)

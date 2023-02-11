@@ -59,3 +59,43 @@ def get_queries_count(queries):
     n_queries = is_query.sum(-1)  # [b]
 
     return n_words, n_queries
+
+
+def ext_visual(visual_feat, visual_mask, b, q, p):
+    """
+    Extend given input to get shape `[b, q, b, p, d]` for visual_feat and `[b, q, b, p]` for visual_mask.
+
+    :param visual_feat: A tensor  of shape `[b, p, d]`
+    :param visual_mask: A tensor of shape `[b, p]`
+    :return: A tuple of tensors `([b, q, b, p, d], [b, q, b, p])` for visual_feat, visual_mask
+    """
+    resh = 1, 1, b, p
+    rep = b, q, 1, 1
+
+    visual_feat = visual_feat.reshape(*resh, -1).repeat(*rep, 1)  # [b, q, b, p, d]
+    visual_mask = visual_mask.reshape(*resh).repeat(*rep)  # [b, q, b, p]
+
+    return visual_feat, visual_mask
+
+
+def ext_textual(textual_feat, textual_mask, b, q, p):
+    """
+    Extend given input to get shape `[b, q, b, p, d]` for textual_feat and `[b, q, b, p]` for textual_mask.
+
+    :param textual_feat: A tensor  of shape `[b, q, d]`
+    :param textual_mask: A tensor of shape `[b, q]`
+    :return: A tuple of tensors `([b, q, b, p, d], [b, q, b, p])` for textual_feat, textual_mask
+    """
+    resh = b, q, 1, 1
+    rep = 1, 1, b, p
+
+    textual_feat = textual_feat.reshape(*resh, -1).repeat(*rep, 1)  # [b, q, b, p, d]
+    textual_mask = textual_mask.reshape(*resh).repeat(*rep)  # [b, q, b, p]
+
+    return textual_feat, textual_mask
+
+
+def mask_softmax(x, mask):
+    # masking to -1e8 is required to enforce softmax predictions to be 0 for
+    # masked values
+    return x.masked_fill(~mask, -1e8)  # [b, p, b, p]

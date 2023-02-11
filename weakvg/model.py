@@ -3,19 +3,36 @@ import torch
 import torch.nn as nn
 
 from weakvg.loss import Loss, LossSupervised
-from weakvg.utils import get_queries_count, get_queries_mask, iou
+from weakvg.utils import (
+    ext_textual,
+    ext_visual,
+    get_queries_count,
+    get_queries_mask,
+    iou,
+    mask_softmax,
+)
 
 
 class MyModel(pl.LightningModule):
     def __init__(
-        self, wordvec, vocab, omega=0.5, task="weak", neg_selection="random"
+        self,
+        wordvec,
+        vocab,
+        omega=0.5,
+        task="weak",
+        neg_selection="random",
+        grounding="similarity",
     ) -> None:
         super().__init__()
         self.we = WordEmbedding(wordvec, vocab)
         self.concept_branch = ConceptBranch(word_embedding=self.we)
         self.visual_branch = VisualBranch(word_embedding=self.we)
         self.textual_branch = TextualBranch(word_embedding=self.we)
-        self.prediction_module = PredictionModule(omega=omega)
+
+        if grounding == "similarity":
+            self.prediction_module = SimilarityPredictionModule(omega=omega)
+        if grounding == "nn":
+            self.prediction_module = NeuralNetworkPredictionModule(omega=omega)
 
         if task == "weak":
             self.loss = Loss(word_embedding=self.we, neg_selection=neg_selection)
@@ -144,7 +161,7 @@ class MyModel(pl.LightningModule):
         return acc
 
 
-class PredictionModule(nn.Module):
+class SimilarityPredictionModule(nn.Module):
     def __init__(self, omega):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
@@ -157,21 +174,25 @@ class PredictionModule(nn.Module):
             tensor of shape `[b, p, d]` and `visual_mask` is a tensor of shape `[b, p, 1]`
 
         :param textual: A tuple `(textual_feat, textual_mask)`, where `textual_feat`
-            is a tensor of shape `[b, q, d]` and `textual_mask` is a tensor of 
+            is a tensor of shape `[b, q, d]` and `textual_mask` is a tensor of
             shape `[b, q, 1]`
 
         :param concepts: A tuple `(concepts_pred, concepts_mask)`, where `concepts_pred`
             is a tensor of shape `[b, q, b, p]` and `concepts_mask` is a tensor of
             shape `[b, q, b, p]`
         """
-        multimodal_pred, multimodal_mask = self.predict_multimodal(visual, textual)  # [b, q, b, p], [b, q, b, p]
-        concepts_pred, concepts_mask = self.predict_concepts(concepts)  # [b, q, b, p], [b, q, b, p]
+        multimodal_pred, multimodal_mask = self.predict_multimodal(
+            visual, textual
+        )  # [b, q, b, p], [b, q, b, p]
+        concepts_pred, concepts_mask = self.predict_concepts(
+            concepts
+        )  # [b, q, b, p], [b, q, b, p]
 
         scores = self.apply_prior(multimodal_pred, concepts_pred)  # [b, q, b, p]
         mask = multimodal_mask & concepts_mask  # [b, q, b, p]
 
         return scores, mask
-    
+
     def predict_multimodal(self, visual, textual):
         visual_feat, visual_mask = visual  # [b, q, d], [b, q, 1]
         textual_feat, textual_mask = textual  # [b, p, d], [b, p, 1]
@@ -180,13 +201,15 @@ class PredictionModule(nn.Module):
         q = textual_feat.shape[1]
         p = visual_feat.shape[1]
 
-        visual_feat, visual_mask = self._ext_visual(visual_feat, visual_mask, b, q, p)
-        textual_feat, textual_mask = self._ext_textual(textual_feat, textual_mask, b, q, p)
+        visual_feat, visual_mask = ext_visual(visual_feat, visual_mask, b, q, p)
+        textual_feat, textual_mask = ext_textual(textual_feat, textual_mask, b, q, p)
 
         multimodal_mask = visual_mask & textual_mask  # [b, q, b, p]
 
-        multimodal_pred = torch.cosine_similarity(visual_feat, textual_feat, dim=-1)  # [b, q, b, p]
-        multimodal_pred = self._mask_softmax(multimodal_pred, multimodal_mask)  # [b, p, b, p]
+        multimodal_pred = torch.cosine_similarity(
+            visual_feat, textual_feat, dim=-1
+        )  # [b, q, b, p]
+        multimodal_pred = mask_softmax(multimodal_pred, multimodal_mask)  # [b, p, b, p]
         multimodal_pred = self.softmax(multimodal_pred)  # [b, p, b, p]
 
         return multimodal_pred, multimodal_mask
@@ -194,7 +217,7 @@ class PredictionModule(nn.Module):
     def predict_concepts(self, concepts):
         concepts_pred, concepts_mask = concepts  # [b, q, b, p], [b, q, b, p]
 
-        concepts_pred = self._mask_softmax(concepts_pred, concepts_mask)  # [b, q, b, p]
+        concepts_pred = mask_softmax(concepts_pred, concepts_mask)  # [b, q, b, p]
         concepts_pred = self.softmax(concepts_pred)  # [b, q, b, p]
 
         return concepts_pred, concepts_mask
@@ -204,28 +227,49 @@ class PredictionModule(nn.Module):
 
         return w * predictions + (1 - w) * prior  # [b, q, b, p]
 
-    def _mask_softmax(self, x, mask):
-        # masking to -1e8 is required to enforce softmax predictions to be 0 for
-        # masked values
-        return x.masked_fill(~mask, -1e8)  # [b, p, b, p]
 
-    def _ext_visual(self, visual_feat, visual_mask, b, q, p):
-        resh = 1, 1, b, p
-        rep = b, q, 1, 1
+class NeuralNetworkPredictionModule(nn.Module):
+    def __init__(self, omega):
+        super().__init__()
+        self.omega = omega
+        self.softmax = nn.Softmax(dim=-1)
+        self.linear = nn.Linear(300 * 2, 1)
 
-        visual_feat = visual_feat.reshape(*resh, -1).repeat(*rep, 1)  # [b, q, b, p, d]
-        visual_mask = visual_mask.reshape(*resh).repeat(*rep)  # [b, q, b, p]
+    def forward(self, visual, textual, concepts):
+        visual_feat, visual_mask = visual  # [b, q, d], [b, q, 1]
+        textual_feat, textual_mask = textual  # [b, p, d], [b, p, 1]
+        concepts_pred, concepts_mask = concepts  # [b, q, b, p], [b, q, b, p]
 
-        return visual_feat, visual_mask
+        b = textual_feat.shape[0]
+        q = textual_feat.shape[1]
+        p = visual_feat.shape[1]
 
-    def _ext_textual(self, textual_feat, textual_mask, b, q, p):
-        resh = b, q, 1, 1
-        rep = 1, 1, b, p
+        visual_feat, visual_mask = ext_visual(visual_feat, visual_mask, b, q, p)
+        textual_feat, textual_mask = ext_textual(textual_feat, textual_mask, b, q, p)
 
-        textual_feat = textual_feat.reshape(*resh, -1).repeat(*rep, 1)  # [b, q, b, p, d]
-        textual_mask = textual_mask.reshape(*resh).repeat(*rep)  # [b, q, b, p]
+        multimodal_mask = visual_mask & textual_mask  # [b, q, b, p]
 
-        return textual_feat, textual_mask
+        multimodal_feat = torch.cat(
+            (visual_feat, textual_feat), dim=-1
+        )  # [b, q, b, p, f], f = 2d
+
+        multimodal_pred = self.linear(multimodal_feat).squeeze(-1)  # [b, q, b, p]
+
+        multimodal_pred = mask_softmax(multimodal_pred, multimodal_mask)  # [b, q, b, p]
+        multimodal_pred = self.softmax(multimodal_pred)  # [b, q, b, p]
+
+        mask = multimodal_mask & concepts_mask  # [b, q, b, p]
+        scores = self.apply_prior(multimodal_pred, concepts_pred)  # [b, q, b, p]
+
+        scores = scores.masked_fill(~mask, 0)  # [b, q, b, p]
+
+        return scores, mask
+
+    def apply_prior(self, predictions, prior):
+        w = self.omega
+
+        return w * predictions + (1 - w) * prior  # [b, q, b, p]
+
 
 class WordEmbedding(nn.Module):
     def __init__(self, wordvec, vocab, *, freeze=True):

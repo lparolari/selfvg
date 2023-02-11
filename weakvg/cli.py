@@ -17,9 +17,10 @@ def get_args():
     exp_group.add_argument(
         "--mode",
         type=str,
+        nargs="*",
         choices=["train", "test"],
-        default="train",
-        help="Program mode. Default: train",
+        default=["train"],
+        help="Program mode. Default: [train]",
     )
     exp_group.add_argument(
         "--task",

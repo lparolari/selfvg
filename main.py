@@ -52,10 +52,10 @@ def main():
         callbacks=callbacks,
     )
 
-    if args.mode == "train":
+    if "train" in args.mode:
         trainer.fit(model, dm)
 
-    if args.mode == "test":
+    if "test" in args.mode:
         trainer.test(model, dm)
 
 

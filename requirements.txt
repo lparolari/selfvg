@@ -10,3 +10,4 @@ pyspellchecker
 pytorch-lightning
 pytest
 spacy
+shortuuid

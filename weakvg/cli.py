@@ -1,13 +1,14 @@
 import argparse
 
 import pytorch_lightning as pl
+import shortuuid
 
 
 def get_args():
     parser = argparse.ArgumentParser()
 
     # global params
-    parser.add_argument("--exp_id", type=str, default="")
+    parser.add_argument("--exp_id", type=str, default=shortuuid.uuid()[:4])
     parser.add_argument("--mode", type=str, choices=["train"], default="train")
     parser.add_argument(
         "--dev",
@@ -70,9 +71,11 @@ def get_logger(args):
 
 def get_callbacks(args):
     model_checkpoint_clbk = pl.callbacks.model_checkpoint.ModelCheckpoint(
-        dirpath="output",
+        dirpath=f"output/{args.exp_id}",
+        filename="{epoch}-{step}-{val_acc:.2f}",
         monitor="val_acc",
         mode="max",
+        save_last=True,
     )
 
     callbacks = [

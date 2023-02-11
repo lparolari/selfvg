@@ -90,6 +90,10 @@ def get_args():
 
     args = parser.parse_args()
 
+    if args.dev:
+        # force verbose logging in dev mode
+        args.verbose = True
+
     return args
 
 
@@ -109,7 +113,7 @@ def get_logger(args):
         return pl.loggers.WandbLogger(
             project="weakvg",
             entity="weakly_guys",
-            log_model=True,
+            log_model=False if args.dev else True,
             name=name,
             settings=wandb.Settings(start_method="fork"),
         )

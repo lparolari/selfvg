@@ -53,13 +53,16 @@ class MyModel(pl.LightningModule):
                 "concepts_mask": concepts_mask,
             }
         )
-
-    def training_step(self, batch, batch_idx):
+    
+    def step(self, batch, batch_id):
+        """
+        :return: A tuple `(loss, metrics)`, where metrics is a dict with `acc`, `point_it`
+        """
         queries = batch["queries"]  # [b, q, w]
         proposals = batch["proposals"]  # [b, p, 4]
         targets = batch["targets"]  # [b, q, 4]
 
-        scores, mask = self.forward(batch)  # [b, q, b, p]
+        scores, _ = self.forward(batch)  # [b, q, b, p]
 
         loss = self.loss({**batch, "scores": scores})
 
@@ -69,26 +72,32 @@ class MyModel(pl.LightningModule):
             candidates, targets, queries
         )  # TODO: refactor -> avoid passing queries whenever possible
 
-        self.log("train_loss", loss)
-        self.log("train_acc", acc, prog_bar=True)
+        point_it = 0
+
+        metrics = {
+            "acc": acc,
+            "point_it": point_it,
+        }
+
+        return loss, metrics
+
+    def training_step(self, batch, batch_idx):
+        loss, metrics = self.step(batch, batch_idx)
+
+        acc = metrics["acc"]
+
+        self.log("train_loss", loss, on_step=False, on_epoch=True)
+        self.log("train_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
 
     def validation_step(self, batch, batch_idx):
-        queries = batch["queries"]  # [b, q, w]
-        proposals = batch["proposals"]  # [b, p, 4]
-        targets = batch["targets"]  # [b, q, 4]
+        loss, metrics = self.step(batch, batch_idx)
 
-        scores, mask = self.forward(batch)  # [b, q, b, p]
+        acc = metrics["acc"]
 
-        loss = self.loss({**batch, "scores": scores})
-
-        candidates = self.predict_candidates(scores, proposals)  # [b, q, 4]
-
-        acc = self.accuracy(candidates, targets, queries)
-
-        self.log("val_loss", loss)
-        self.log("val_acc", acc, prog_bar=True)
+        self.log("val_loss", loss, on_step=False, on_epoch=True)
+        self.log("val_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
 
@@ -96,9 +105,13 @@ class MyModel(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=1e-5)
 
     def predict_candidates(self, scores, proposals):
-        # scores: [b, q, b, p]
-        # proposals: [b, p, 4]
+        """
+        Predict a candidate bounding box for each query
 
+        :param scores: A tensor of shape [b, q, b, p] with the scores
+        :param proposals: A tensor of shape [b, p, 4] with the proposals
+        :return: A tensor of shape [b, q, 4] with the predicted candidates
+        """
         b = scores.shape[0]
         q = scores.shape[1]
         p = scores.shape[3]

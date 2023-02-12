@@ -15,6 +15,19 @@ def get_args():
         help="Experiment identifier. Default: random",
     )
     exp_group.add_argument(
+        "--exp_notes",
+        type=str,
+        default=None,
+        help="Experiment description. Default: None",
+    )
+    exp_group.add_argument(
+        "--exp_tags",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Experiment tags. Default: None",
+    )
+    exp_group.add_argument(
         "--mode",
         type=str,
         nargs="*",
@@ -125,6 +138,8 @@ def get_logger(args, model=None):
             entity="weakly_guys",
             log_model=False if args.dev else True,
             name=name,
+            notes=args.exp_notes,
+            tags=args.exp_tags,
             settings=wandb.Settings(start_method="fork"),
         )
 

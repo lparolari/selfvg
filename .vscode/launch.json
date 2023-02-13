@@ -18,6 +18,8 @@
         "--num_workers=12",
         "--neg_selection=textual_sim_max",
         "--grounding=nn",
+        // "--exp_id=dev",
+        "--exp_notes=delete",
       ],
       "console": "integratedTerminal",
       "justMyCode": true,

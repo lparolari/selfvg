@@ -1,7 +1,6 @@
 import argparse
 
 import pytorch_lightning as pl
-import shortuuid
 
 
 def get_args():
@@ -11,7 +10,7 @@ def get_args():
     exp_group.add_argument(
         "--exp_id",
         type=str,
-        default=shortuuid.uuid()[:4],
+        default=None,
         help="Experiment identifier. Default: random",
     )
     exp_group.add_argument(
@@ -105,10 +104,18 @@ def get_args():
         "--checkpoint", type=str, default=None, help="Checkpoint to load. Default: None"
     )
     model_group.add_argument(
-        "--neg_selection", type=str, default="random", choices=["random", "textual_sim_max"], help="Strategy for negative example selection. Default: random"
+        "--neg_selection",
+        type=str,
+        default="random",
+        choices=["random", "textual_sim_max"],
+        help="Strategy for negative example selection. Default: random",
     )
     model_group.add_argument(
-        "--grounding", type=str, default="similarity", choices=["similarity", "nn"], help="Grounding strategy. Default: similarity"
+        "--grounding",
+        type=str,
+        default="similarity",
+        choices=["similarity", "nn"],
+        help="Grounding strategy. Default: similarity",
     )
 
     args = parser.parse_args()
@@ -131,6 +138,7 @@ def get_logger(args, model=None):
         )
 
     if args.logger == "wandb":
+        import copy
         import wandb
 
         logger = pl.loggers.WandbLogger(
@@ -143,6 +151,15 @@ def get_logger(args, model=None):
             settings=wandb.Settings(start_method="fork"),
         )
 
+        # remove args that do not belong to experiment config
+        args = copy.deepcopy(args)
+
+        keys_to_remove = ["exp_id", "exp_notes", "exp_tags", "verbose", "logger", "dev"]
+
+        for k in keys_to_remove:
+            delattr(args, k)
+
+        # then update experiment config
         logger.experiment.config.update(vars(args))
 
         if model is not None:

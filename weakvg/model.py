@@ -263,7 +263,6 @@ class NeuralNetworkPredictionModule(nn.Module):
     def __init__(self, omega):
         super().__init__()
         self.omega = omega
-        self.softmax = nn.Softmax(dim=-1)
         self.linear = nn.Linear(300 * 2, 1)
 
     def forward(self, visual, textual, concepts):
@@ -285,9 +284,7 @@ class NeuralNetworkPredictionModule(nn.Module):
         )  # [b, q, b, p, f], f = 2d
 
         multimodal_pred = self.linear(multimodal_feat).squeeze(-1)  # [b, q, b, p]
-
-        multimodal_pred = mask_softmax(multimodal_pred, multimodal_mask)  # [b, q, b, p]
-        multimodal_pred = self.softmax(multimodal_pred)  # [b, q, b, p]
+        multimodal_pred = multimodal_pred.masked_fill(~multimodal_mask, 0)  # [b, q, b, p]
 
         mask = multimodal_mask & concepts_mask  # [b, q, b, p]
         scores = self.apply_prior(multimodal_pred, concepts_pred)  # [b, q, b, p]

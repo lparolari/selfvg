@@ -10,6 +10,7 @@ from weakvg.utils import (
     get_queries_mask,
     iou,
     mask_softmax,
+    tlbr2ctwh,
 )
 
 
@@ -72,7 +73,7 @@ class MyModel(pl.LightningModule):
             candidates, targets, queries
         )  # TODO: refactor -> avoid passing queries whenever possible
 
-        point_it = 0
+        point_it = self.point_it(candidates, targets, queries)
 
         metrics = {
             "acc": acc,
@@ -85,9 +86,11 @@ class MyModel(pl.LightningModule):
         loss, metrics = self.step(batch, batch_idx)
 
         acc = metrics["acc"]
+        point_it = metrics["point_it"]
 
         self.log("train_loss", loss, on_step=False, on_epoch=True)
         self.log("train_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train_pointit", point_it, on_step=False, on_epoch=True)
 
         return loss
 
@@ -95,9 +98,11 @@ class MyModel(pl.LightningModule):
         loss, metrics = self.step(batch, batch_idx)
 
         acc = metrics["acc"]
+        point_it = metrics["point_it"]
 
         self.log("val_loss", loss, on_step=False, on_epoch=True)
         self.log("val_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_pointit", point_it, on_step=False, on_epoch=True)
 
         return loss
 
@@ -105,9 +110,11 @@ class MyModel(pl.LightningModule):
         loss, metrics = self.step(batch, batch_idx)
 
         acc = metrics["acc"]
+        point_it = metrics["point_it"]
 
         self.log("test_loss", loss, on_step=False, on_epoch=True)
         self.log("test_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("test_pointit", point_it, on_step=False, on_epoch=True)
 
         return loss
 
@@ -160,6 +167,30 @@ class MyModel(pl.LightningModule):
 
         return acc
 
+    def point_it(self, candidates, targets, queries):
+        # candidates: [b, q, 4]
+        # targets: [b, q, 4]
+        # queries: [b, q, w]
+
+        centers = tlbr2ctwh(candidates)[..., :2]  # [b, q, 2]
+
+        topleft = targets[..., :2]  # [b, q, 2]
+        bottomright = targets[..., 2:]  # [b, q, 2]
+        
+        # count a match whether center is inside the target
+        matches = (centers >= topleft) & (centers <= bottomright)  # [b, q, 2]
+        matches = matches.all(-1)  # [b, q]
+
+        # mask padding queries
+        _, is_query = get_queries_mask(queries)  # [b, q, w], [b, q]
+        _, n_queries = get_queries_count(queries)  # [b, q], [b]
+
+        matches = matches.masked_fill(~is_query, False)  # [b, q]
+
+        point_it = matches.sum() / n_queries.sum()
+
+        return point_it
+        
 
 class SimilarityPredictionModule(nn.Module):
     def __init__(self, omega):

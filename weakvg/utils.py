@@ -99,3 +99,30 @@ def mask_softmax(x, mask):
     # masking to -1e8 is required to enforce softmax predictions to be 0 for
     # masked values
     return x.masked_fill(~mask, -1e8)  # [b, p, b, p]
+
+
+def tlbr2tlwh(x):
+    """
+    Convert bounding boxes from [x1, y1, x2, y2] to [x1, y1, w, h]
+
+    :param x: A tensor of shape `[*, 4]`
+    :return: A tensor of shape `[*, 4]`
+    """
+    x1, y1, x2, y2 = x.unbind(-1)
+    w = x2 - x1
+    h = y2 - y1
+    return torch.stack([x1, y1, w, h], -1)
+
+
+def tlbr2ctwh(x):
+    """
+    Convert bounding boxes from [x1, y1, x2, y2] to [cx, cy, w, h] where (cx, cy) is
+    the center of the box
+
+    :param x: A tensor of shape `[*, 4]`
+    :return: A tensor of shape `[*, 4]`
+    """
+    x1, y1, w, h = tlbr2tlwh(x).unbind(-1)
+    cx = x1 + w / 2
+    cy = y1 + h / 2
+    return torch.stack([cx, cy, w, h], -1)

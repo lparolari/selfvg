@@ -142,7 +142,7 @@ def get_logger(args, model=None):
         import wandb
 
         logger = pl.loggers.WandbLogger(
-            project="weakvg",
+            project="weakvg++",
             entity="weakly_guys",
             log_model=False if args.dev else True,
             name=name,

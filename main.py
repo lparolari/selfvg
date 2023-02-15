@@ -19,7 +19,7 @@ def main():
     pl.seed_everything(42, workers=True)
 
     tokenizer = get_tokenizer("basic_english")
-    wordvec, vocab = get_wordvec(custom_tokens=get_objects_vocab())
+    wordvec, vocab = get_wordvec(custom_tokens=[] if args.dev else get_objects_vocab())
     nlp = get_nlp()
 
     dm = Flickr30kDataModule(

@@ -68,7 +68,7 @@ def get_args():
         "--dev",
         default=False,
         action="store_true",
-        help="Dev mode uses validation set instead of training set. Default: false",
+        help="Dev mode uses validation set instead of training set and do not load custom tokens. Default: false",
     )
     exp_group.add_argument(
         "--verbose",

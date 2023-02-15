@@ -264,12 +264,13 @@ class Flickr30kDatum:
 
 
 class Flickr30kDataset(Dataset):
-    def __init__(self, split, data_dir, tokenizer, vocab, nlp=None):
+    def __init__(self, split, data_dir, tokenizer, vocab, nlp=None, transform=None):
         self.data_dir = data_dir
         self.split = split
         self.tokenizer = tokenizer
         self.vocab = vocab
         self.nlp = nlp
+        self.transform = transform
 
         self.identifiers = None
         """A list of numbers that identify each sample"""
@@ -311,7 +312,7 @@ class Flickr30kDataset(Dataset):
             proposals_feat
         ), f"Expected length of `proposals_feat` to be {len(proposals)}, got {len(proposals_feat)}"
 
-        return {
+        item = {
             "meta": meta,
             "sentence": sentence,
             "queries": queries,
@@ -324,6 +325,11 @@ class Flickr30kDataset(Dataset):
             "proposals_feat": proposals_feat,
             "targets": targets,
         }
+
+        if self.transform:
+            item = self.transform(item)
+
+        return item
 
     def load(self):
         self._load_identifiers()
@@ -445,6 +451,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
             "tokenizer": self.tokenizer,
             "vocab": self.vocab,
             "nlp": self.nlp,
+            "transform": NormalizeCoord(),
         }
 
         if stage == "fit" or stage is None:
@@ -514,9 +521,28 @@ def collate_fn(batch):
         "heads": pad_queries(batch["heads"], head_max_length).long(),
         "image_w": torch.tensor(batch["image_w"]),
         "image_h": torch.tensor(batch["image_h"]),
-        "proposals": pad_proposals(batch["proposals"], proposal_max_length),
+        "proposals": pad_proposals(batch["proposals"], proposal_max_length).float(),
         "labels": pad_labels(batch["labels"], proposal_max_length),
         "attrs": pad_labels(batch["attrs"], proposal_max_length),
         "proposals_feat": pad_proposals(batch["proposals_feat"], proposal_max_length),
-        "targets": pad_targets(batch["targets"]),
+        "targets": pad_targets(batch["targets"]).float(),
     }
+
+
+class NormalizeCoord:
+    def __call__(self, sample):
+        w, h = sample["image_w"], sample["image_h"]
+
+        size = np.array([w, h, w, h])
+
+        proposals = np.array(sample["proposals"]).astype(np.float64)
+        targets = np.array(sample["targets"]).astype(np.float64)
+
+        proposals_norm = proposals / size
+        targets_norm = targets / size
+        
+        return {
+            **sample,
+            "proposals": proposals_norm,
+            "targets": targets_norm,
+        }

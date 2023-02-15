@@ -105,7 +105,7 @@ class LossSupervised(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.ce = nn.CrossEntropyLoss(reduction="none")
+        self.nll = nn.NLLLoss(reduction="none")
 
     def forward(self, x):
         scores = x["scores"]  # [b, q, b, p]
@@ -120,10 +120,13 @@ class LossSupervised(nn.Module):
         # [N, C, d1, ..., dk] where C is the number of classes, while
         # the target tensor to have shape [N, d1, ..., dk]
         # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
-
         scores = scores.permute(0, 2, 1)  # [b, p, q]
 
-        loss = self.ce(scores, classes)  # [b, q]
+        # we compute log softmax because `scores` are not logits, they are
+        # probabilities computed as output of a softmax layer
+        scores = torch.log(scores)  # [b, p, q]
+
+        loss = self.nnl(scores, classes)  # [b, q]
 
         _, is_query = get_queries_mask(queries)  # [b, q]
         _, n_queries = get_queries_count(queries)  # [b]

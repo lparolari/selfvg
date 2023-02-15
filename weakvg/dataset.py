@@ -392,10 +392,6 @@ class Flickr30kDataset(Dataset):
 
         self.identifiers = identifiers
 
-    def _pad_targets(self, targets: List[int]) -> List[int]:
-        x = [torch.tensor(target) for target in targets]
-        return targets
-
     def _open_images_size(self):
         images_size_file = os.path.join(self.data_dir, self.split + "_images_size.json")
         return ImagesSizeRepository(images_size_file)

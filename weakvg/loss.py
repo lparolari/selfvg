@@ -126,7 +126,7 @@ class LossSupervised(nn.Module):
         # probabilities computed as output of a softmax layer
         scores = torch.log(scores)  # [b, p, q]
 
-        loss = self.nnl(scores, classes)  # [b, q]
+        loss = self.nll(scores, classes)  # [b, q]
 
         _, is_query = get_queries_mask(queries)  # [b, q]
         _, n_queries = get_queries_count(queries)  # [b]

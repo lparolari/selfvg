@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from typing import Any, Dict, List
 
 import numpy as np
@@ -345,6 +346,8 @@ class Flickr30kDataset(Dataset):
         }
 
         samples = []
+
+        logging.debug(f"Loading {len(self.identifiers)} images...")
 
         for identifier in self.identifiers:
             for sample in Flickr30kDatum(

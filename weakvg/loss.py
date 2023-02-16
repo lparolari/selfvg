@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from weakvg.utils import get_queries_mask, get_queries_count
+from weakvg.utils import get_mask, get_queries_count, get_queries_mask, tlbr2ctwh
 
 
 class Loss(nn.Module):
@@ -9,7 +9,7 @@ class Loss(nn.Module):
         """
         :param neg_selection: Negative selection strategy. One of:
           * `random`, selects one random negative example
-          * `textual_sim_max`, selects the most similar example according 
+          * `textual_sim_max`, selects the most similar example according
             to the averaged similarity of queries among examples.
         """
         super().__init__()
@@ -40,12 +40,12 @@ class Loss(nn.Module):
         scores_n = (scores * neg).sum(-1) / neg.sum(-1)  # [b]
 
         return -scores_p.mean() + scores_n.mean()
-    
+
     def select_pos(self, x):
         scores = x["scores"]  # [b, q, b, p]
 
         b = scores.shape[0]
-        
+
         return torch.eye(b).to(scores.device).bool()  # [b, b]
 
     def select_neg(self, x, pos):
@@ -68,7 +68,7 @@ class Loss(nn.Module):
             # filter positive examples, which have similarity 1
             sim = sim.masked_fill(pos, 0)  # [b, b]
 
-            # negative similarity, i.e., the similarity value of the most 
+            # negative similarity, i.e., the similarity value of the most
             # similar example
             sim_n, _ = sim.max(-1, keepdim=True)  # [b, 1]
 
@@ -83,20 +83,26 @@ class Loss(nn.Module):
         """
         Returns a tensor of shape `[b, b]` with the averaged similarity between examples.
         """
-        b = queries_e.shape[0]        
+        b = queries_e.shape[0]
 
         # averaged query representation over words
         query_repr = queries_e.sum(dim=-2) / n_words.unsqueeze(-1)  # [b, q, d]
-        query_repr = query_repr.masked_fill((n_words == 0).unsqueeze(-1), value=0)  # [b, q, d]
+        query_repr = query_repr.masked_fill(
+            (n_words == 0).unsqueeze(-1), value=0
+        )  # [b, q, d]
 
         # averaged query representation over phrases
-        query_repr = query_repr.sum(dim=-2) / n_queries.unsqueeze(-1) # [b, d]
-        query_repr = query_repr.masked_fill((n_queries == 0).unsqueeze(-1), value=0)  # [b, d]
+        query_repr = query_repr.sum(dim=-2) / n_queries.unsqueeze(-1)  # [b, d]
+        query_repr = query_repr.masked_fill(
+            (n_queries == 0).unsqueeze(-1), value=0
+        )  # [b, d]
 
         query_repr_a = query_repr.unsqueeze(1).repeat(1, b, 1)  # [b, b, d]
         query_repr_b = query_repr.unsqueeze(0).repeat(b, 1, 1)  # [b, b, d]
 
-        query_similarity = torch.cosine_similarity(query_repr_a, query_repr_b, dim=-1)    # [b, b]
+        query_similarity = torch.cosine_similarity(
+            query_repr_a, query_repr_b, dim=-1
+        )  # [b, b]
 
         return query_similarity
 
@@ -106,12 +112,22 @@ class LossSupervised(nn.Module):
         super().__init__()
 
         self.nll = nn.NLLLoss(reduction="none")
+        self.smooth_l1 = nn.SmoothL1Loss(reduction="none")
 
     def forward(self, x):
+        return self.grounding_loss(x) + self.offsets_loss(x)
+
+    def grounding_loss(self, x):
         scores = x["scores"]  # [b, q, b, p]
         proposals = x["proposals"]  # [b, p, 4]
         targets = x["targets"]  # [b, q, 4]
         queries = x["queries"]  # [b, q, w]
+
+        scores_mask = get_mask(x)  # [b, q, b, p]
+        _, n_queries = get_queries_count(queries)  # [b]
+
+        # we mask scores with 1 to get 0 as output from log
+        scores = scores.masked_fill(~scores_mask, 1)  # [b, q, b, p]
 
         scores = self.positive(scores)  # [b, q, p]
         classes = self.classes(targets, proposals)  # [b, q]
@@ -128,10 +144,56 @@ class LossSupervised(nn.Module):
 
         loss = self.nll(scores, classes)  # [b, q]
 
-        _, is_query = get_queries_mask(queries)  # [b, q]
-        _, n_queries = get_queries_count(queries)  # [b]
+        # manually reduce the loss
+        loss = loss.sum() / n_queries.sum()
 
-        loss = loss.masked_fill(~is_query, 0)  # [b, q]
+        return loss
+
+    def offsets_loss(self, x):
+        scores = x["scores"]  # [b, q, b, p]
+        offsets = x["offsets"]  # [b, q, b, p, 4]
+        proposals = x["proposals"]  # [b, p, 4]
+        targets = x["targets"]  # [b, q, 4]
+
+        b = scores.shape[0]
+        q = scores.shape[1]
+
+        scores_mask = get_mask(x)  # [b, q, b, p]
+
+        scores = scores.masked_fill(~scores_mask, 0)  # [b, q, b, p]
+        offsets = offsets.masked_fill(~scores_mask.unsqueeze(-1), 0)  # [b, q, b, p, 4]
+
+        offsets = self.positive(offsets)  # [b, q, p, 4]
+        proposals = proposals.unsqueeze(-3).repeat(1, q, 1, 1)  # [b, q, p, 4]
+
+        # get the index of the best proposal for each query
+        best_idx = self.positive(scores).argmax(-1)  # [b, q]
+
+        best_idx = best_idx.view(b, q, 1, 1).repeat(1, 1, 1, 4)  # [b, q, 1, 4]
+
+        # gather over proposals
+        proposals = proposals.gather(-2, best_idx).squeeze(-2)  # [b, q, 4]
+        offsets = offsets.gather(-2, best_idx).squeeze(-2)  # [b, q, 4]
+
+        # sum offsets to proposals
+        proposals = tlbr2ctwh(proposals)  # [b, q, 4]
+        proposals = proposals + offsets  # [b, q, 4]
+        proposals = proposals.clamp(min=0, max=1)  # [b, q, 4]
+
+        targets = tlbr2ctwh(targets)  # [b, q, 4]
+
+        loss = self.smooth_l1(proposals, targets)  # [b, q, 4]
+
+        _, is_query = get_queries_mask(x["queries"])  # [b, q]
+        _, n_queries = get_queries_count(x["queries"])  # [b]
+
+        # masking here is required because the smooth l1 loss is computed
+        # for each proposals and targets. proposals returned for padding
+        # queries are valid proposals, in particular they are the first
+        # proposal for each query (due to the argmax on scores), thus the
+        # smooth l1 between a non zero proposal and a zero proposal is != 0
+        loss = loss.masked_fill(~is_query.unsqueeze(-1), 0)  # [b, q, 4]
+
         loss = loss.sum() / n_queries.sum()
 
         return loss
@@ -140,18 +202,25 @@ class LossSupervised(nn.Module):
         """
         Gather the scores of the positive proposals.
 
-        :param scores: Tensor with shape `[b, q, b, p]`
-        :return: Tensor with shape `[b, q, p]`
+        :param scores: Tensor with shape `[b, q, b, p, *]`
+        :return: Tensor with shape `[b, q, p, *]`
         """
         b = scores.shape[0]
         q = scores.shape[1]
         p = scores.shape[3]
 
         ident = torch.eye(b).to(scores.device)  # [b, b]
-        ident = ident.argmax(-1)  # [b]
-        ident = ident.view(-1, 1, 1, 1).repeat(1, q, 1, p)  # [b, q, 1, p]
+        index = ident.argmax(-1)  # [b]
 
-        scores = scores.gather(-2, ident).squeeze(-2)  # [b, q, p]
+        star_dim = scores.dim() - 4
+        star_shape = scores.shape[4:]  # [*]
+
+        view = (b, 1, 1, 1) + (1,) * star_dim
+        repeat = (1, q, 1, p) + star_shape
+
+        index = index.view(*view).repeat(*repeat)  # [b, q, 1, p, *]
+
+        scores = scores.gather(2, index).squeeze(2)  # [b, q, p, *]
 
         return scores
 

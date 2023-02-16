@@ -11,6 +11,7 @@ from weakvg.utils import (
     iou,
     mask_softmax,
     tlbr2ctwh,
+    ctwh2tlbr,
 )
 
 
@@ -29,7 +30,8 @@ class MyModel(pl.LightningModule):
         self.concept_branch = ConceptBranch(word_embedding=self.we)
         self.visual_branch = VisualBranch(word_embedding=self.we)
         self.textual_branch = TextualBranch(word_embedding=self.we)
-
+        self.bb_offset = BoundingBoxOffset()
+    
         if grounding == "similarity":
             self.prediction_module = SimilarityPredictionModule(omega=omega)
         if grounding == "nn":
@@ -49,11 +51,25 @@ class MyModel(pl.LightningModule):
 
         textual_feat, textual_mask = self.textual_branch(x)  # [b, q, d], [b, q, 1]
 
-        return self.prediction_module(
+        # TODO: mask can be computed separately from modules through a function that
+        # verify a condition over "queries" or "proposals"
+        # Please update in order to avoid passing masks as input
+
+        scores, scores_mask = self.prediction_module(
             (visual_feat, visual_mask),
             (textual_feat, textual_mask),
             (concepts_pred, concepts_mask),
-        )
+        )  # [b, q, b, p], [b, q, b, p]
+
+        offsets = self.bb_offset(
+            (visual_feat, visual_mask),
+            (textual_feat, textual_mask),
+        ) # [b, q, b, p, 4]
+
+        scores = scores.masked_fill(~scores_mask, 0)
+        offsets = offsets.masked_fill(~scores_mask.unsqueeze(-1), 0)
+
+        return (scores, scores_mask), offsets
 
     def step(self, batch, batch_id):
         """
@@ -63,11 +79,14 @@ class MyModel(pl.LightningModule):
         proposals = batch["proposals"]  # [b, p, 4]
         targets = batch["targets"]  # [b, q, 4]
 
-        scores, _ = self.forward(batch)  # [b, q, b, p]
+        # TODO: refactor -> forward should directly return candidates ???
+        (scores, scores_mask), offsets = self.forward(batch)  # [b, q, b, p]
 
-        loss = self.loss({**batch, "scores": scores})
+        loss = self.loss({**batch, "scores": scores, 
+        "scores_mask": scores_mask, # TODO: remove
+        "offsets": offsets})
 
-        candidates = self.predict_candidates(scores, proposals)  # [b, q, 4]
+        candidates = self.predict_candidates(scores, proposals, offsets)  # [b, q, 4]
 
         acc = self.accuracy(
             candidates, targets, queries
@@ -121,12 +140,13 @@ class MyModel(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=1e-5)
 
-    def predict_candidates(self, scores, proposals):
+    def predict_candidates(self, scores, proposals, offsets):
         """
         Predict a candidate bounding box for each query
 
         :param scores: A tensor of shape [b, q, b, p] with the scores
         :param proposals: A tensor of shape [b, p, 4] with the proposals
+        :param offsets: A tensor of shape [b, q, b, p, 4] with the offsets
         :return: A tensor of shape [b, q, 4] with the predicted candidates
         """
         b = scores.shape[0]
@@ -139,9 +159,19 @@ class MyModel(pl.LightningModule):
 
         scores = scores.gather(-2, index).squeeze(-2)  # [b, q, p]
 
-        predictions = scores.argmax(-1).unsqueeze(-1).repeat(1, 1, 4)  # [b, q, 4]
+        scores = scores.argmax(-1).unsqueeze(-1).repeat(1, 1, 4)  # [b, q, 4]
 
-        candidates = proposals.gather(-2, predictions)  # [b, q, 4]
+        candidates = proposals.gather(-2, scores)  # [b, q, 4]
+
+        index_o = index.unsqueeze(-1).repeat(1, 1, 1, 1, 4)  # [b, q, 1, p, 4]
+        offsets = offsets.gather(-3, index_o).squeeze(-3)  # [b, q, p, 4]
+        scores_o = scores.unsqueeze(-2)  # [b, q, 1, 4]
+        offsets = offsets.gather(-2, scores_o).squeeze(-2)  # [b, q, 4]
+
+        candidates = tlbr2ctwh(candidates)  # [b, q, 4]
+        candidates = candidates + offsets  # [b, q, 4]
+        candidates = candidates.clamp(min=0, max=1)  # [b, q, 4]
+        candidates = ctwh2tlbr(candidates)  # [b, q, 4]
 
         return candidates
 
@@ -461,3 +491,38 @@ class TextualBranch(nn.Module):
         queries_x = queries_x.masked_fill(~mask, 0)
 
         return queries_x, mask
+
+
+class BoundingBoxOffset(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        d = 300
+        self.fc = nn.Linear(d + d, 4)
+
+        self._init_weights()
+
+    def forward(self, visual, textual):
+        """
+        :param visual: A tuple of tensors `([b, p, d], [b, p, 1])`
+        :param textual: A tuple of tensors `([b, q, d], [b, q, 1])`
+        :return: A tensor of shape `[b, p, b, p, 4]` of offsets in `[cx, cy, w, h]` format. No mask applied.
+        """
+        visual_feat, visual_mask = visual
+        textual_feat, textual_mask = textual
+
+        b = visual_feat.shape[0]
+        q = textual_feat.shape[1]
+        p = visual_feat.shape[1]
+
+        visual_feat, _ = ext_visual(visual_feat, visual_mask, b, q, p)
+        textual_feat, _ = ext_textual(textual_feat, textual_mask, b, q, p)
+
+        fused = torch.cat([textual_feat, visual_feat], dim=-1)  # [b, q, b, p, d + d]
+        fused = self.fc(fused)  # [b, p, b, p, 4]
+
+        return fused
+    
+    def _init_weights(self):
+        nn.init.xavier_normal_(self.fc.weight)
+        nn.init.zeros_(self.fc.bias)

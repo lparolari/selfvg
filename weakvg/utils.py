@@ -78,9 +78,7 @@ def get_multimodal_mask(queries, proposals):
     :return: A tensor with shape `[b, q, b, p]`
     """
     queries_mask = get_queries_mask(queries)[1]  # [b, q]
-    print(queries_mask.shape)
     proposals_mask = get_proposals_mask(proposals)  # [b, p]
-    print(proposals_mask.shape)
 
     b = queries.shape[0]
     q = queries.shape[1]

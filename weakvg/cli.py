@@ -35,13 +35,6 @@ def get_args():
         help="Program mode. Default: [train]",
     )
     exp_group.add_argument(
-        "--task",
-        type=str,
-        default="weak",
-        choices=["weak", "full"],
-        help="Model task, weakly- or fully-supervised. Default: weak",
-    )
-    exp_group.add_argument(
         "--max_epochs",
         type=int,
         default=25,

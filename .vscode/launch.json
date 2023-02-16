@@ -14,7 +14,6 @@
         "--batch_size=4",
         "--accelerator=cpu",
         "--logger=tensorboard",
-        "--task=full",
         "--num_workers=12",
         "--neg_selection=textual_sim_max",
         "--grounding=nn",

@@ -140,3 +140,9 @@ def get_nlp():
 
     nlp = spacy.load("en_core_web_sm")
     return nlp
+
+
+def get_tokenizer():
+    from torchtext.data.utils import get_tokenizer as get_t
+
+    return get_t("basic_english")

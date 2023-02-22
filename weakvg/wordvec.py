@@ -2,7 +2,7 @@ import logging
 from typing import List, Tuple, Optional
 
 import torch
-from torchtext.vocab import GloVe, Vocab, vocab as make_vocab, build_vocab_from_iterator
+from torchtext.vocab import GloVe, vocab as make_vocab
 
 Alternative = Optional[List[str]]
 Missing = Tuple[str, Alternative]

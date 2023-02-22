@@ -3,15 +3,16 @@ import torch
 import torch.nn as nn
 
 from weakvg.loss import Loss
-from weakvg.utils import (
-    ext_textual,
-    ext_visual,
+from weakvg.masking import (
+    get_concepts_mask_,
+    get_mask_,
+    get_proposals_mask,
+    get_proposals_mask_,
     get_queries_count,
     get_queries_mask,
-    iou,
-    mask_softmax,
-    tlbr2ctwh,
+    get_queries_mask_,
 )
+from weakvg.utils import ext_textual, ext_visual, iou, mask_softmax, tlbr2ctwh
 
 
 class MyModel(pl.LightningModule):
@@ -28,7 +29,7 @@ class MyModel(pl.LightningModule):
         self.concept_branch = ConceptBranch(word_embedding=self.we)
         self.visual_branch = VisualBranch(word_embedding=self.we)
         self.textual_branch = TextualBranch(word_embedding=self.we)
-    
+
         if grounding == "similarity":
             self.prediction_module = SimilarityPredictionModule(omega=omega)
         if grounding == "nn":
@@ -39,25 +40,25 @@ class MyModel(pl.LightningModule):
         self.save_hyperparameters(ignore=["wordvec", "vocab"])
 
     def forward(self, x):
-        concepts_pred, concepts_mask = self.concept_branch(x)  # [b, q, b, p]
+        concepts_pred = self.concept_branch(x)  # [b, q, b, p]
 
-        visual_feat, visual_mask = self.visual_branch(x)  # [b, p, d], [b, p, 1]
+        visual_feat = self.visual_branch(x)  # [b, p, d], [b, p, 1]
 
-        textual_feat, textual_mask = self.textual_branch(x)  # [b, q, d], [b, q, 1]
+        textual_feat = self.textual_branch(x)  # [b, q, d], [b, q, 1]
 
-        # TODO: mask can be computed separately from modules through a function that
-        # verify a condition over "queries" or "proposals"
-        # Please update in order to avoid passing masks as input
+        visual_mask = get_proposals_mask_(x)  # [b, p]
+        textual_mask = get_queries_mask_(x)[1]  # [b, q]
+        concepts_mask = get_concepts_mask_(x)  # [b, q, b, p]
 
-        scores, scores_mask = self.prediction_module(
+        scores, (multimodal_scores, concepts_scores) = self.prediction_module(
             (visual_feat, visual_mask),
             (textual_feat, textual_mask),
             (concepts_pred, concepts_mask),
-        )  # [b, q, b, p], [b, q, b, p]
+        )  # [b, q, b, p], ([b, q, b, p], [b, q, b, p])
 
-        scores = scores.masked_fill(~scores_mask, 0)
+        scores = scores.masked_fill(~get_mask_(x), 0)
 
-        return scores, scores_mask
+        return scores, (multimodal_scores, concepts_scores)
 
     def step(self, batch, batch_id):
         """
@@ -67,12 +68,11 @@ class MyModel(pl.LightningModule):
         proposals = batch["proposals"]  # [b, p, 4]
         targets = batch["targets"]  # [b, q, 4]
 
-        # TODO: refactor -> forward should directly return candidates ???
         scores, _ = self.forward(batch)  # [b, q, b, p]
 
         loss = self.loss({**batch, "scores": scores})
 
-        candidates = self.predict_candidates(scores, proposals)  # [b, q, 4]
+        candidates, _ = self.predict_candidates(scores, proposals)  # [b, q, 4]
 
         acc = self.accuracy(
             candidates, targets, queries
@@ -142,13 +142,17 @@ class MyModel(pl.LightningModule):
         index = index.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)  # [b, 1, 1, 1]
         index = index.repeat(1, q, 1, p)  # [b, q, 1, p]
 
+        # select only positive scores
         scores = scores.gather(-2, index).squeeze(-2)  # [b, q, p]
 
-        scores = scores.argmax(-1).unsqueeze(-1).repeat(1, 1, 4)  # [b, q, 4]
+        # find best best proposal index
+        best_idx = scores.argmax(-1)  # [b, q]
 
-        candidates = proposals.gather(-2, scores)  # [b, q, 4]
+        select_idx = best_idx.unsqueeze(-1).repeat(1, 1, 4)  # [b, q, 4]
 
-        return candidates
+        candidates = proposals.gather(-2, select_idx)  # [b, q, 4]
+
+        return candidates, best_idx
 
     def accuracy(self, candidates, targets, queries):
         # scores: [b, q, b, p]
@@ -181,7 +185,7 @@ class MyModel(pl.LightningModule):
 
         topleft = targets[..., :2]  # [b, q, 2]
         bottomright = targets[..., 2:]  # [b, q, 2]
-        
+
         # count a match whether center is inside the target
         matches = (centers >= topleft) & (centers <= bottomright)  # [b, q, 2]
         matches = matches.all(-1)  # [b, q]
@@ -195,7 +199,7 @@ class MyModel(pl.LightningModule):
         point_it = matches.sum() / n_queries.sum()
 
         return point_it
-        
+
 
 class SimilarityPredictionModule(nn.Module):
     def __init__(self, omega):
@@ -207,15 +211,19 @@ class SimilarityPredictionModule(nn.Module):
     def forward(self, visual, textual, concepts):
         """
         :param visual: A tuple `(visual_feat, visual_mask)`, where `visual_feat` is a
-            tensor of shape `[b, p, d]` and `visual_mask` is a tensor of shape `[b, p, 1]`
+            tensor of shape `[b, p, d]` and `visual_mask` is a tensor of shape `[b, p]`
 
         :param textual: A tuple `(textual_feat, textual_mask)`, where `textual_feat`
             is a tensor of shape `[b, q, d]` and `textual_mask` is a tensor of
-            shape `[b, q, 1]`
+            shape `[b, q]`
 
         :param concepts: A tuple `(concepts_pred, concepts_mask)`, where `concepts_pred`
             is a tensor of shape `[b, q, b, p]` and `concepts_mask` is a tensor of
             shape `[b, q, b, p]`
+
+        :return: A tensor of shape `[b, q, b, p], ([b, q, b, p], [b, q, b, p])` with the
+            similarity scores and the two predictions of the underlying models: the
+            multimodal prediction and the concepts prediction
         """
         multimodal_pred, multimodal_mask = self.predict_multimodal(
             visual, textual
@@ -225,13 +233,16 @@ class SimilarityPredictionModule(nn.Module):
         )  # [b, q, b, p], [b, q, b, p]
 
         scores = self.apply_prior(multimodal_pred, concepts_pred)  # [b, q, b, p]
+
         mask = multimodal_mask & concepts_mask  # [b, q, b, p]
 
-        return scores, mask
+        scores = scores.masked_fill(~mask, 0)  # [b, q, b, p]
+
+        return scores, (multimodal_pred, concepts_pred)
 
     def predict_multimodal(self, visual, textual):
-        visual_feat, visual_mask = visual  # [b, q, d], [b, q, 1]
-        textual_feat, textual_mask = textual  # [b, p, d], [b, p, 1]
+        visual_feat, visual_mask = visual  # [b, q, d], [b, q]
+        textual_feat, textual_mask = textual  # [b, p, d], [b, p]
 
         b = textual_feat.shape[0]
         q = textual_feat.shape[1]
@@ -301,7 +312,7 @@ class NeuralNetworkPredictionModule(nn.Module):
 
         scores = scores.masked_fill(~mask, 0)  # [b, q, b, p]
 
-        return scores, mask
+        return scores, (multimodal_pred, concepts_pred)
 
     def apply_prior(self, predictions, prior):
         w = self.omega
@@ -340,14 +351,9 @@ class ConceptBranch(nn.Module):
         labels_e = self.we(labels)  # [b, p, d]
         labels_e = labels_e.unsqueeze(0).unsqueeze(0)  # [1, 1, b, p, d]
 
-        sim = self.sim_fn(heads_e, labels_e)  # [b, q, b, p]
+        scores = self.sim_fn(heads_e, labels_e)  # [b, q, b, p]
 
-        has_head = (n_heads != 0).unsqueeze(-1)  # [b, q, 1, 1]
-        has_label = (labels != 0).unsqueeze(0).unsqueeze(0)  # [1, 1, b, p]
-
-        mask = has_head & has_label  # [b, q, b, p]
-
-        return sim, mask
+        return scores
 
 
 class VisualBranch(nn.Module):
@@ -366,7 +372,7 @@ class VisualBranch(nn.Module):
         proposals_feat = x["proposals_feat"]  # [b, p, v]
         labels = x["labels"]  # [b, p]
 
-        mask = proposals.greater(0).any(-1).unsqueeze(-1)  # [b, p, 1]
+        mask = get_proposals_mask(proposals).unsqueeze(-1)  # [b, p, 1]
 
         labels_e = self.we(labels)  # [b, p, d]
         spat = self.spatial(x)  # [b, p, 5]
@@ -376,7 +382,7 @@ class VisualBranch(nn.Module):
 
         fusion = fusion.masked_fill(~mask, 0)
 
-        return fusion, mask
+        return fusion
 
     def spatial(self, x):
         proposals = x["proposals"]  # [b, p, 4]
@@ -465,4 +471,4 @@ class TextualBranch(nn.Module):
 
         queries_x = queries_x.masked_fill(~mask, 0)
 
-        return queries_x, mask
+        return queries_x

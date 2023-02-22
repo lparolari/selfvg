@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from weakvg.utils import get_queries_count
+from weakvg.masking import get_queries_count
 
 
 class Loss(nn.Module):

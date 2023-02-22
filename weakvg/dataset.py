@@ -20,6 +20,7 @@ from weakvg.repo import (
     ImagesSizeRepository,
     ObjectsDetectionRepository,
     ObjectsFeatureRepository,
+    HeadsRepository,
 )
 
 Box = List[int]
@@ -87,6 +88,12 @@ class Flickr30kDatum:
 
     def get_heads(self, sentence_id, query_id=None) -> List[str]:
         a_slice = slice(query_id, query_id and query_id + 1)
+
+        if self._has_precomputed("heads"):
+            return self.precomputed["heads"].get_heads(self.identifier, sentence_id)[
+                a_slice
+            ]
+
         queries = self.get_queries(sentence_id, query_id)
 
         if not self.nlp:
@@ -215,6 +222,9 @@ class Flickr30kDatum:
                 targets_ann[entity_id].append([left, top, right, bottom])
 
         self._targets_ann = targets_ann
+
+    def _has_precomputed(self, key: str) -> bool:
+        return key in self.precomputed and self.precomputed[key] is not None
 
     @staticmethod
     def _remove_sentence_ann(sentence: str) -> str:
@@ -345,17 +355,19 @@ class Flickr30kDataset(Dataset):
         images_size_repo = self._open_images_size()
         objects_detection_repo = self._open_objects_detection()
         objects_feature_repo = self._open_objects_feature()
+        heads_repo = self._open_heads()
 
         precomputed = {
             "images_size": images_size_repo,
             "objects_detection": objects_detection_repo,
             "objects_feature": objects_feature_repo,
+            "heads": heads_repo,
         }
 
         samples = []
         data = []
 
-        logging.debug(f"Loading {len(self.identifiers)} images...")
+        logging.info(f"Loading {len(self.identifiers)} image-sentence pairs")
 
         for identifier in self.identifiers:
             datum = Flickr30kDatum(
@@ -452,6 +464,14 @@ class Flickr30kDataset(Dataset):
             self.data_dir, self.split + "_features_compress.hdf5"
         )
         return ObjectsFeatureRepository(id2idx_path, objects_feature_file)
+
+    def _open_heads(self):
+        heads_file = os.path.join(self.data_dir, self.split + "_heads.json")
+
+        if not os.path.exists(heads_file):
+            return None
+
+        return HeadsRepository(heads_file)
 
 
 class Flickr30kDataModule(pl.LightningDataModule):

@@ -53,3 +53,18 @@ class ObjectsFeatureRepository:
         idx = self.id2idx[identifier]
         pos = self.positions[idx]
         return self.features[pos[0] : pos[1]]
+
+
+class HeadsRepository:
+    def __init__(self, heads_path) -> None:
+        logging.debug(f"Loading heads at {heads_path}...")
+        with open(heads_path, "r") as f:
+            self.heads = json.load(f)
+
+    def get_heads(self, identifier, sentence_id=None):
+        heads = self.heads[str(identifier)]
+
+        if sentence_id is not None:
+            return heads[sentence_id]
+        
+        return heads

@@ -21,14 +21,18 @@ from weakvg.repo import (
     ObjectsDetectionRepository,
     ObjectsFeatureRepository,
 )
-from weakvg.utils import union_box
 
 Box = List[int]
 
 
 class Flickr30kDatum:
     def __init__(
-        self, identifier: int, *, data_dir: str, precomputed: Dict[str, Dict[int, Any]], nlp=None
+        self,
+        identifier: int,
+        *,
+        data_dir: str,
+        precomputed: Dict[str, Dict[int, Any]],
+        nlp=None,
     ):
         self.identifier = identifier
         self.data_dir = data_dir
@@ -274,10 +278,13 @@ class Flickr30kDataset(Dataset):
         self.transform = transform
 
         self.identifiers = None
-        """A list of numbers that identify each sample"""
+        """A list identifiers for each image-sentence pair"""
+
+        self.data = None
+        """A list of image-sentence pair datum"""
 
         self.samples = None
-        """A list of Sample objects"""
+        """A list of batch-able samples for the model"""
 
         self.load()
         self.preflight_check()
@@ -346,19 +353,25 @@ class Flickr30kDataset(Dataset):
         }
 
         samples = []
+        data = []
 
         logging.debug(f"Loading {len(self.identifiers)} images...")
 
         for identifier in self.identifiers:
-            for sample in Flickr30kDatum(
+            datum = Flickr30kDatum(
                 identifier,
                 data_dir=self.data_dir,
                 precomputed=precomputed,
                 nlp=self.nlp,
-            ):
+            )
+
+            data.append(datum)
+
+            for sample in datum:
                 samples.append(sample)
 
         self.samples = samples
+        self.data = data
 
     def preflight_check(self):
         if len(self.identifiers) == 0:
@@ -366,6 +379,34 @@ class Flickr30kDataset(Dataset):
 
         if len(self.samples) == 0:
             raise RuntimeError("Cannot create dataset with 0 samples")
+
+    def get_split(self):
+        return self.split
+
+    def get_upperbound_accuracy(self):
+        total = 0
+        matched = 0
+
+        for sample in iter(self):
+            targets = sample["targets"]
+            proposals = sample["proposals"]
+
+            for target in targets:
+                iou_scores = [iou(target, proposal) for proposal in proposals]
+                max_iou = max(iou_scores)
+
+                if max_iou >= 0.5:
+                    matched += 1
+
+                total += 1
+
+        return matched / total
+
+    def print_statistics(self):
+        print(f"Flickr30k ({self.split})")
+        print(f"Number of images-sentences pairs: {len(self.data)}")
+        print(f"Number of samples: {len(self)}")
+        print(f"Upperbound accuracy: {self.get_upperbound_accuracy() * 100:.2f}")
 
     def _prepare_sentence(self, sentence: str) -> List[int]:
         sentence = self.tokenizer(sentence)
@@ -539,9 +580,69 @@ class NormalizeCoord:
 
         proposals_norm = proposals / size
         targets_norm = targets / size
-        
+
         return {
             **sample,
             "proposals": proposals_norm,
             "targets": targets_norm,
         }
+
+
+def union_box(boxes: List[Box]):
+    x1 = min([box[0] for box in boxes])
+    y1 = min([box[1] for box in boxes])
+    x2 = max([box[2] for box in boxes])
+    y2 = max([box[3] for box in boxes])
+    return [x1, y1, x2, y2]
+
+
+def iou(box_a: Box, box_b: Box):
+    x1 = max(box_a[0], box_b[0])
+    y1 = max(box_a[1], box_b[1])
+    x2 = min(box_a[2], box_b[2])
+    y2 = min(box_a[3], box_b[3])
+
+    intersection = max(0, x2 - x1) * max(0, y2 - y1)
+    area_a = (box_a[2] - box_a[0]) * (box_a[3] - box_a[1])
+    area_b = (box_b[2] - box_b[0]) * (box_b[3] - box_b[1])
+    union = area_a + area_b - intersection
+
+    return intersection / union
+
+
+if __name__ == "__main__":
+    # Run with: python -m weakvg.dataset
+
+    import logging
+    import argparse
+
+    from weakvg.wordvec import get_tokenizer, get_wordvec, get_nlp, get_objects_vocab
+
+    logging.basicConfig(level=logging.DEBUG)
+
+    args = argparse.ArgumentParser(
+        description="Load Flickr30k Dataset and print its statistics"
+    )
+    args.add_argument("--split", type=str, default="val")
+    args.add_argument("--load_objects_vocab", action="store_true", default=False)
+
+    args = args.parse_args()
+
+    load_objects_vocab = args.load_objects_vocab
+    split = args.split
+
+    tokenizer = get_tokenizer()
+    nlp = get_nlp()
+    wordvec, vocab = get_wordvec(
+        custom_tokens=get_objects_vocab() if load_objects_vocab else []
+    )
+
+    ds = Flickr30kDataset(
+        split=split,
+        data_dir="data/flickr30k",
+        tokenizer=tokenizer,
+        vocab=vocab,
+        nlp=nlp,
+    )
+
+    ds.print_statistics()

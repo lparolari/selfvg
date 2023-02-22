@@ -17,11 +17,23 @@
         "--num_workers=12",
         "--neg_selection=textual_sim_max",
         "--grounding=nn",
-        "--mode=train",
+        "--mode=test",
         // "--exp_id=dev",
         "--exp_notes=delete",
         "--max_epochs=1",
       ],
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "HDF5_USE_FILE_LOCKING": "false"
+      }
+    },
+    {
+      "name": "visualize",
+      "type": "python",
+      "request": "launch",
+      "program": "visualize.py",
+      "args": ["--checkpoint=output/model.ckpt"],
       "console": "integratedTerminal",
       "justMyCode": true,
       "env": {

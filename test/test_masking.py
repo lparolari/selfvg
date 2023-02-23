@@ -10,7 +10,7 @@ from weakvg.masking import (
 )
 
 
-class TestUtils(unittest.TestCase):
+class TestMasking(unittest.TestCase):
     def test_get_proposals_mask(self):
         proposals = torch.tensor([[10, 0, 20, 20], [0, 0, 0, 0]])
 

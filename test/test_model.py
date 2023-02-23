@@ -44,10 +44,9 @@ class TestTextualBranch(unittest.TestCase):
 
         textual_branch = TextualBranch(word_embedding=self.we)
 
-        output, mask = textual_branch.forward({"queries": queries})
+        output = textual_branch.forward({"queries": queries})
 
         self.assertEqual(output.shape, (1, 2, 300))
-        self.assertEqual(mask.shape, (1, 2, 1))
 
 
 class TestVisualBranch(unittest.TestCase):
@@ -125,9 +124,8 @@ class TestConceptBranch(unittest.TestCase):
 
         concept_branch = ConceptBranch(word_embedding=self.we)
 
-        output, mask = concept_branch.forward({"heads": heads, "labels": labels})
+        output = concept_branch.forward({"heads": heads, "labels": labels})
 
-        self.assertEqual(mask.shape, (1, 2, 1, 8))
         self.assertEqual(output.shape, (1, 2, 1, 8))
 
         q1 = (0, 0, 0)
@@ -135,6 +133,3 @@ class TestConceptBranch(unittest.TestCase):
 
         self.assertAlmostEqual(output[q1].argmax().item(), 0)  # also label 4 could be correct, but the argmax selects the first one
         self.assertAlmostEqual(output[q2].argmax().item(), 1)
-
-        self.assertAlmostEqual(mask[q1].sum(), 5)
-        self.assertAlmostEqual(mask[q2].sum(), 5)

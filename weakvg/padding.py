@@ -9,6 +9,8 @@ Query = List[int]
 Queries = List[Query]
 Proposal = List[int]  # [int, int, int, int]
 Proposals = List[Proposal]
+LabelsAlternatives = List[int]
+LabelsSyn = List[LabelsAlternatives]
 Labels = List[int]
 
 
@@ -41,10 +43,27 @@ def pad_proposals(b: List[Proposals], max_proposal_length, *, val=0):
     b = b[..., :max_proposal_length, :]
     return b
 
+
 def pad_labels(b: List[Labels], max_labels_length, *, val=0):
     b = [torch.tensor(p) for p in b]
     b = pad_sequence(b, batch_first=True, padding_value=val)
     b = b[..., :max_labels_length]
+    return b
+
+
+def pad_labels_syn(b: List[LabelsSyn], max_labels_length, max_alternatives_length, *, val=0):
+    to_tensor = lambda ls: [torch.tensor(l) for l in ls]
+    cap_length = lambda ls: [l[..., :max_alternatives_length] for l in ls]
+    pad_smaller = lambda ls: [
+        pad(l, (0, max_labels_length - l.shape[0]), value=val) for l in ls
+    ]
+
+    b = [to_tensor(qs) for qs in b]
+    b = [cap_length(qs) for qs in b]
+    b = [pad_smaller(qs) for qs in b]
+    b = [torch.stack(qs) for qs in b]
+    b = pad_sequence(b, batch_first=True, padding_value=val)
+
     return b
 
 

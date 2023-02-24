@@ -340,18 +340,19 @@ class ConceptBranch(nn.Module):
 
     def forward(self, x):
         heads = x["heads"]  # [b, q, h]
-        labels = x["labels"]  # [b, p]
+        labels = x["labels_syn"]  # [b, p, a]
 
         n_heads = (heads != 0).sum(-1).unsqueeze(-1)  # [b, q, 1]
 
         heads_e = self.we(heads)  # [b, q, h, d]
         heads_e = heads_e.sum(-2) / n_heads  # [b, q, d]
-        heads_e = heads_e.unsqueeze(-2).unsqueeze(-2)  # [b, q, 1, 1, d]
+        heads_e = heads_e.unsqueeze(-2).unsqueeze(-2).unsqueeze(-2)  # [b, q, 1, 1, 1, d]
 
-        labels_e = self.we(labels)  # [b, p, d]
-        labels_e = labels_e.unsqueeze(0).unsqueeze(0)  # [1, 1, b, p, d]
+        labels_e = self.we(labels)  # [b, p, a, d]
+        labels_e = labels_e.unsqueeze(0).unsqueeze(0)  # [1, 1, b, p, a, d]
 
-        scores = self.sim_fn(heads_e, labels_e)  # [b, q, b, p]
+        scores = self.sim_fn(heads_e, labels_e)  # [b, q, b, p, a]
+        scores, _ = scores.max(-1) # [b, q, b, p]
 
         return scores
 

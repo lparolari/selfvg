@@ -172,7 +172,7 @@ class TestFlickr30kDatum(unittest.TestCase):
 
         self.assertListEqual(sample.get_proposals(), proposals)
 
-    def test_get_classes(self):
+    def test_get_labels(self):
         sample = self._make_sample()
 
         classes = [
@@ -211,7 +211,7 @@ class TestFlickr30kDatum(unittest.TestCase):
             "microphone",
         ]
 
-        self.assertListEqual(sample.get_classes(), classes)
+        self.assertListEqual(sample.get_labels(), classes)
 
     def test_get_attrs(self):
         sample = self._make_sample()
@@ -253,6 +253,11 @@ class TestFlickr30kDatum(unittest.TestCase):
         ]
 
         self.assertListEqual(sample.get_attrs(), attrs)
+
+    def test_get_labels_syn(self):
+        sample = self._make_sample()
+
+        self.assertListEqual(sample.get_labels_syn(), [[label] for label in sample.get_labels()])
 
     def test_get_proposals_feat(self):
         sample = self._make_sample()

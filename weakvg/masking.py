@@ -88,6 +88,7 @@ def get_concepts_mask(heads, labels):
     n_heads = (heads != 0).sum(-1).unsqueeze(-1)  # [b, q, 1]
 
     has_head = (n_heads != 0).unsqueeze(-1)  # [b, q, 1, 1]
+
     has_label = (labels != 0).unsqueeze(0).unsqueeze(0)  # [1, 1, b, p]
 
     mask = has_head & has_label

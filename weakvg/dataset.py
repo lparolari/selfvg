@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from weakvg.padding import (
     pad_labels,
+    pad_labels_syn,
     pad_proposals,
     pad_queries,
     pad_sentence,
@@ -137,8 +138,11 @@ class Flickr30kDatum:
     def get_proposals(self) -> List[List[int]]:
         return self.precomputed["objects_detection"].get_boxes(self.identifier)
 
-    def get_classes(self) -> List[str]:
+    def get_labels(self) -> List[str]:
         return self.precomputed["objects_detection"].get_classes(self.identifier)
+    
+    def get_labels_syn(self) -> List[List[str]]:
+        return [[label] for label in self.precomputed["objects_detection"].get_classes(self.identifier)]
 
     def get_attrs(self) -> List[str]:
         return self.precomputed["objects_detection"].get_attrs(self.identifier)
@@ -172,8 +176,9 @@ class Flickr30kDatum:
                 "image_h": self.get_image_h(),
                 # box
                 "proposals": self.get_proposals(),
-                "labels": self.get_classes(),
+                "labels": self.get_labels(),
                 "attrs": self.get_attrs(),
+                "labels_syn": self.get_labels_syn(),
                 # feats
                 "proposals_feat": self.get_proposals_feat(),
                 # targets
@@ -314,6 +319,7 @@ class Flickr30kDataset(Dataset):
         proposals = sample["proposals"]
         labels = self._prepare_labels(sample["labels"])
         attrs = self._prepare_labels(sample["attrs"])
+        labels_syn = self._prepare_labels_syn(sample["labels_syn"])
         proposals_feat = sample["proposals_feat"]
         targets = self._prepare_targets(sample["targets"])
 
@@ -340,6 +346,7 @@ class Flickr30kDataset(Dataset):
             "proposals": proposals,
             "labels": labels,
             "attrs": attrs,
+            "labels_syn": labels_syn,
             "proposals_feat": proposals_feat,
             "targets": targets,
         }
@@ -430,8 +437,11 @@ class Flickr30kDataset(Dataset):
         queries = [self.vocab(query) for query in queries]
         return queries
 
-    def _prepare_labels(self, labels: List[str]) -> List[List[int]]:
+    def _prepare_labels(self, labels: List[str]) -> List[int]:
         return self.vocab(labels)
+
+    def _prepare_labels_syn(self, labels: List[List[str]]) -> List[List[int]]:
+        return [self.vocab(alternatives) for alternatives in labels]
 
     def _prepare_targets(self, targets: List[List[Box]]) -> List[Box]:
         return [union_box(target) for target in targets]
@@ -571,6 +581,7 @@ def collate_fn(batch):
     query_max_length = 12
     head_max_length = 5
     proposal_max_length = 100
+    label_alternatives_max_length = 6
 
     batch = pd.DataFrame(batch).to_dict(orient="list")
 
@@ -584,6 +595,7 @@ def collate_fn(batch):
         "proposals": pad_proposals(batch["proposals"], proposal_max_length).float(),
         "labels": pad_labels(batch["labels"], proposal_max_length),
         "attrs": pad_labels(batch["attrs"], proposal_max_length),
+        "labels_syn": pad_labels_syn(batch["labels_syn"], proposal_max_length, label_alternatives_max_length),
         "proposals_feat": pad_proposals(batch["proposals_feat"], proposal_max_length),
         "targets": pad_targets(batch["targets"]).float(),
     }

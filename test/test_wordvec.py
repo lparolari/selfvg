@@ -46,6 +46,9 @@ class TestWordvecBuilder(unittest.TestCase):
         self.assertTrue(torch.equal(wv["<unk>"], vecs[vocab["<unk>"]]))
         self.assertTrue(torch.equal(wv["the"], vecs[vocab["the"]]))
 
+        self.assertEqual(wv.stoi["<unk>"], 0)
+        self.assertEqual(wv.stoi["the"], 1)
+
         self.assertEqual(vocab.get_default_index(), 0)
 
         self.assertEqual(vocab["<unk>"], 0)
@@ -114,3 +117,17 @@ class TestWordvecBuilder(unittest.TestCase):
 
         self.assertTrue(torch.equal(wv["the"], vecs[vocab["the"]]))
         self.assertTrue(torch.equal(wv["microwave,microwave oven"], vecs[vocab["microwave,microwave oven"]]))
+
+    def test_with_custom_tokens__not_breaking_prev_structure(self):
+        d = self.dim
+        b = (
+            WordvecBuilder()
+            .with_glove(**self.wv_kwargs)
+            .with_vocab()
+            .with_custom_tokens(["microwave oven"])
+        )
+
+        wv = b.get_wordvec()
+        vecs = wv.vectors
+
+        self.assertTrue(torch.equal(vecs[0], torch.zeros(d)))

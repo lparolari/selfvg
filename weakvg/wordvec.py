@@ -124,8 +124,6 @@ class WordvecBuilder:
         self.n_added_tokens += 1
 
     def _find_embedding_for_parts(self, parts):
-        unk_token = self.vocab.lookup_token(self.vocab.get_default_index())
-
         for part in parts:
             if part in self.vocab:
                 return self.wordvec[part]
@@ -134,9 +132,8 @@ class WordvecBuilder:
                 # part may be a compound word like "stop sign", so we need to compute
                 # the average embedding over words
 
+                part_emb = torch.zeros(self.wordvec.dim)
                 words_found = 0.0
-
-                part_emb = self.wordvec[unk_token]  # zero emb
 
                 for word in part.split():
                     if word in self.vocab:

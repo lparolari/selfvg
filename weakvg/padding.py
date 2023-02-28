@@ -55,16 +55,21 @@ def pad_labels_syn(b: List[LabelsSyn], max_labels_length, max_alternatives_lengt
     to_tensor = lambda ls: [torch.tensor(l) for l in ls]
     cap_alternatives = lambda ls: [l[..., :max_alternatives_length] for l in ls]
     cap_labels = lambda ls: ls[:max_labels_length]
-    pad_smaller = lambda ls: [
-        pad(l, (0, max_labels_length - l.shape[0]), value=val) for l in ls
+    pad_alternatives = lambda ls: [
+        pad(l, (0, max_alternatives_length - l.shape[0]), value=val) for l in ls
+    ]
+    pad_labels = lambda ls, n_max_labels: [
+        pad(l, (0, 0, 0, n_max_labels - l.shape[0]), value=val) for l in ls
     ]
 
-    b = [to_tensor(qs) for qs in b]
-    b = [cap_alternatives(qs) for qs in b]
-    b = [cap_labels(qs) for qs in b]
-    b = [pad_smaller(qs) for qs in b]
-    b = [torch.stack(qs) for qs in b]
-    b = pad_sequence(b, batch_first=True, padding_value=val)
+    b = [to_tensor(ps) for ps in b]
+    b = [cap_alternatives(ps) for ps in b]
+    b = [cap_labels(ps) for ps in b]
+    b = [pad_alternatives(ps) for ps in b]
+    b = [torch.stack(ps) for ps in b]
+    n_max_labels = max([len(ps) for ps in b])
+    b = pad_labels(b, n_max_labels)
+    b = torch.stack(b)
 
     return b
 

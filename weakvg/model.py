@@ -343,6 +343,11 @@ class ConceptBranch(nn.Module):
         labels = x["labels_syn"]  # [b, p, a]
 
         n_heads = (heads != 0).sum(-1).unsqueeze(-1)  # [b, q, 1]
+        
+        is_heads = (n_heads != 0).unsqueeze(-1).unsqueeze(-1)  # [b, q, 1, 1, 1]
+        is_labels = (labels != 0).unsqueeze(0).unsqueeze(0)  # [1, 1, b, p, a]
+
+        mask = is_heads & is_labels  # [b, q, b, p, a]
 
         heads_e = self.we(heads)  # [b, q, h, d]
         heads_e = heads_e.sum(-2) / n_heads  # [b, q, d]
@@ -352,6 +357,7 @@ class ConceptBranch(nn.Module):
         labels_e = labels_e.unsqueeze(0).unsqueeze(0)  # [1, 1, b, p, a, d]
 
         scores = self.sim_fn(heads_e, labels_e)  # [b, q, b, p, a]
+        scores = scores.masked_fill(~mask, -1)  # [b, q, b, p, a]
         scores, _ = scores.max(-1) # [b, q, b, p]
 
         return scores

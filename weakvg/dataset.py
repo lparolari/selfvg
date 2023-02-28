@@ -22,6 +22,7 @@ from weakvg.repo import (
     ObjectsDetectionRepository,
     ObjectsFeatureRepository,
     HeadsRepository,
+    LabelsRepository,
 )
 
 Box = List[int]
@@ -142,7 +143,12 @@ class Flickr30kDatum:
         return self.precomputed["objects_detection"].get_classes(self.identifier)
     
     def get_labels_syn(self) -> List[List[str]]:
-        return [[label] for label in self.precomputed["objects_detection"].get_classes(self.identifier)]
+        if not self._has_precomputed("labels"):
+            return [[label] for label in self.get_labels()]
+    
+        get_alternatives = self.precomputed["labels"].get_alternatives
+
+        return [get_alternatives(label) for label in self.get_labels()]
 
     def get_attrs(self) -> List[str]:
         return self.precomputed["objects_detection"].get_attrs(self.identifier)
@@ -363,12 +369,14 @@ class Flickr30kDataset(Dataset):
         objects_detection_repo = self._open_objects_detection()
         objects_feature_repo = self._open_objects_feature()
         heads_repo = self._open_heads()
+        labels_repo = self._open_labels_repo()
 
         precomputed = {
             "images_size": images_size_repo,
             "objects_detection": objects_detection_repo,
             "objects_feature": objects_feature_repo,
             "heads": heads_repo,
+            "labels": labels_repo,
         }
 
         samples = []
@@ -483,6 +491,11 @@ class Flickr30kDataset(Dataset):
 
         return HeadsRepository(heads_file)
 
+    def _open_labels_repo(self):
+        labels_file = os.path.join(self.data_dir, "objects_vocab.txt")
+        alternatives_file = os.path.join(self.data_dir, "objects_vocab_merged.txt")
+
+        return LabelsRepository.from_vocab(labels_file, alternatives_file)
 
 class Flickr30kDataModule(pl.LightningDataModule):
     def __init__(

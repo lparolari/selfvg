@@ -111,14 +111,14 @@ class TestConceptBranch(unittest.TestCase):
 
         labels = torch.tensor(
             [
-                [self.vocab["person"], unk],
-                [self.vocab["dog"], unk],
-                [self.vocab["sky"], unk],
-                [self.vocab["person"], self.vocab["man"]],  # we have 2 alternatives
-                [self.vocab["bird"], unk],
-                [unk, unk],  # pad
-                [unk, unk],  # pad
-                [unk, unk],  # pad
+                self.vocab["person"],
+                self.vocab["dog"],
+                self.vocab["sky"],
+                self.vocab["person"],
+                self.vocab["bird"],
+                unk,  # pad
+                unk,  # pad
+                unk,  # pad
             ]
         ).unsqueeze(
             0
@@ -126,15 +126,15 @@ class TestConceptBranch(unittest.TestCase):
 
         concept_branch = ConceptBranch(word_embedding=self.we)
 
-        output = concept_branch.forward({"heads": heads, "labels_syn": labels})
+        output = concept_branch.forward({"heads": heads, "labels": labels})
 
         self.assertEqual(output.shape, (1, 2, 1, 8))
 
         q1 = (0, 0, 0)
         q2 = (0, 1, 0)
 
-        # label 1 and 3 have both "person" label which is close to "man", but label
-        # 3 has also the alternative "man", thus it should be chosen
-        self.assertEqual(output[q1].argmax().item(), 3)
+        # label 1 and 3 have both "person" label which is close to "man", but due
+        # to argmax impl the first one is chosen
+        self.assertEqual(output[q1].argmax().item(), 0)
 
         self.assertEqual(output[q2].argmax().item(), 1)

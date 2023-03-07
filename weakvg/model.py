@@ -385,14 +385,13 @@ class VisualBranch(nn.Module):
         return fusion
 
     def spatial(self, x):
+        """
+        Compute spatial features for each proposals as [x1, y1, x2, y2, area] assuming
+        that coordinates are already normalized to [0, 1].
+        """
         proposals = x["proposals"]  # [b, p, 4]
-        image_w = x["image_w"].unsqueeze(-1)  # [b, 1]
-        image_h = x["image_h"].unsqueeze(-1)  # [b, 1]
 
-        x1 = proposals[..., 0] / image_w  # [b, p]
-        y1 = proposals[..., 1] / image_h
-        x2 = proposals[..., 2] / image_w
-        y2 = proposals[..., 3] / image_h
+        x1, y1, x2, y2 = proposals.unbind(-1)  # [b, p], [b, p], [b, p], [b, p]
 
         area = (x2 - x1) * (y2 - y1)  # [b, p]
 

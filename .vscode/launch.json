@@ -30,6 +30,25 @@
       }
     },
     {
+      "name": "main (checkpoint)",
+      "type": "python",
+      "request": "launch",
+      "program": "main.py",
+      "args": [
+        "--batch_size=4",
+        "--accelerator=cpu",
+        "--logger=tensorboard",
+        "--num_workers=12",
+        "--mode=test",
+        "--checkpoint=output/model.ckpt",
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "HDF5_USE_FILE_LOCKING": "false"
+      }
+    },
+    {
       "name": "visualize",
       "type": "python",
       "request": "launch",

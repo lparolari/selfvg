@@ -25,17 +25,18 @@ class MyModel(pl.LightningModule):
         grounding="similarity",
     ) -> None:
         super().__init__()
-        self.we = WordEmbedding(wordvec, vocab)
-        self.concept_branch = ConceptBranch(word_embedding=self.we)
-        self.visual_branch = VisualBranch(word_embedding=self.we)
-        self.textual_branch = TextualBranch(word_embedding=self.we)
+        we = WordEmbedding(wordvec, vocab, freeze=False)
+        we_freezed = WordEmbedding(wordvec, vocab, freeze=True)
+        self.concept_branch = ConceptBranch(word_embedding=we_freezed)
+        self.visual_branch = VisualBranch(word_embedding=we)
+        self.textual_branch = TextualBranch(word_embedding=we)
 
         if grounding == "similarity":
             self.prediction_module = SimilarityPredictionModule(omega=omega)
         if grounding == "nn":
             self.prediction_module = NeuralNetworkPredictionModule(omega=omega)
 
-        self.loss = Loss(word_embedding=self.we, neg_selection=neg_selection)
+        self.loss = Loss(word_embedding=we_freezed, neg_selection=neg_selection)
 
         self.save_hyperparameters(ignore=["wordvec", "vocab"])
 

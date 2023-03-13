@@ -547,22 +547,13 @@ class Flickr30kDataModule(pl.LightningDataModule):
             self.test_dataset = Flickr30kDataset(split="test", **dataset_kwargs)
 
     def train_dataloader(self):
-        from torch.utils.data.sampler import SubsetRandomSampler
-
-        n_samples = len(self.train_dataset)
-        n_subset = int(n_samples * self.train_fraction)
-
-        train_indices = np.random.choice(n_samples, size=n_subset, replace=False)
-
-        sampler = SubsetRandomSampler(train_indices)
-
         return DataLoader(
             self.train_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
             drop_last=True,
-            sampler=sampler,
+            sampler=self._get_sampler(self.train_dataset, self.train_fraction),
             collate_fn=collate_fn,
         )
 
@@ -574,6 +565,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
             shuffle=False,
             pin_memory=True,
             drop_last=True,
+            sampler=self._get_sampler(self.val_dataset, self.train_fraction) if self.dev else None,
             collate_fn=collate_fn,
         )
 
@@ -587,6 +579,18 @@ class Flickr30kDataModule(pl.LightningDataModule):
             drop_last=True,
             collate_fn=collate_fn,
         )
+
+    def _get_sampler(self, dataset, fract):
+        from torch.utils.data.sampler import SubsetRandomSampler
+
+        n_samples = len(dataset)
+        n_subset = int(n_samples * fract)
+
+        train_indices = np.random.choice(n_samples, size=n_subset, replace=False)
+
+        sampler = SubsetRandomSampler(train_indices)
+
+        return sampler
 
 
 def collate_fn(batch):

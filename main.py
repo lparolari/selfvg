@@ -43,7 +43,6 @@ def main():
             vocab,
             omega=args.omega,
             neg_selection=args.neg_selection,
-            grounding=args.grounding,
         )
     
     logging.info(f"Model hparams: " + json.dumps(model.hparams_initial, indent=4))

@@ -114,14 +114,16 @@ def get_args():
 
 
 def get_logger(args, model=None):
-    name = args.exp_id or None
-
     if args.logger == "tensorboard":
         import os
 
-        return pl.loggers.tensorboard.TensorBoardLogger(
-            name=name, save_dir=os.path.join(os.getcwd(), "tb_logs")
+        logger = pl.loggers.tensorboard.TensorBoardLogger(
+            name=args.exp_id, save_dir=os.path.join(os.getcwd(), "tb_logs")
         )
+
+        args.exp_id = args.exp_id or f"version_{logger.version}"
+
+        return logger
 
     if args.logger == "wandb":
         import copy
@@ -131,22 +133,32 @@ def get_logger(args, model=None):
             project="weakvg++",
             entity="weakly_guys",
             log_model=False if args.dev else True,
-            name=name,
+            name=args.exp_id,
             notes=args.exp_notes,
             tags=args.exp_tags,
             settings=wandb.Settings(start_method="fork"),
         )
 
+        # we use the `logger.version` to be coherent with wandb naming.
+        # please note that
+        #
+        #  * `logger.version` is the experiment id in the wandb logger 
+        #    (`logger.experiment.id`), i.e. a random string like `9n17vs3z`. 
+        #
+        #  * the wandb experiment name like `frosty-grass-69` can be found
+        #    at `logger.experiment.name` instead.
+        args.exp_id = args.exp_id or f"{logger.version}"
+
+        args_to_log = copy.deepcopy(args)
+
         # remove args that do not belong to experiment config
-        args = copy.deepcopy(args)
+        to_remove = ["exp_id", "exp_notes", "exp_tags", "verbose", "logger", "dev"]
 
-        keys_to_remove = ["exp_id", "exp_notes", "exp_tags", "verbose", "logger", "dev"]
-
-        for k in keys_to_remove:
-            delattr(args, k)
+        for key in to_remove:
+            delattr(args_to_log, key)
 
         # then update experiment config
-        logger.experiment.config.update(vars(args))
+        logger.experiment.config.update(vars(args_to_log))
 
         if model is not None:
             logger.watch(model, log="all")

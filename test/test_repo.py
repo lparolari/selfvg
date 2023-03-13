@@ -15,6 +15,16 @@ class TestLabelsRepository(unittest.TestCase):
         self.assertListEqual(alts4dog, ["dog", "dogs", "puppy"])
         self.assertListEqual(alts4dog, alts4puppy)
 
+    def test_get_raw(self):
+        repo = LabelsRepository(
+            labels=["man", "dog", "male", "dogs", "puppy"],
+            alternatives=["1:man,3:male", "2:dog,4:dogs,5:puppy"],
+        )
+
+        raw4dog = repo.get_raw("dog")
+
+        self.assertEqual(raw4dog, "2:dog,4:dogs,5:puppy")
+
     def test_from_vocab(self):
         labels_path = "data/objects_vocab.txt"
         alternatives_path = "data/objects_vocab_merged.txt"

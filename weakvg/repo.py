@@ -102,6 +102,12 @@ class LabelsRepository:
         alternatives = self.idx2alternatives[alternativesidx]
         return [alternative.split(":")[1] for alternative in alternatives.split(",")]
 
+    def get_raw(self, label: str) -> str:
+        labelidx = self.labels2idx[label]
+        alternativesidx = self.labelidx2alternativesidx[labelidx]
+        alternatives = self.idx2alternatives[alternativesidx]
+        return alternatives
+
     @classmethod
     def read_labels(cls, labels_path):
         logging.debug(f"Loading labels at {labels_path}...")

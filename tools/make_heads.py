@@ -17,7 +17,7 @@ def main():
     split = args.split
 
     tokenizer = get_tokenizer()
-    _, vocab = get_wordvec(custom_tokens=get_objects_vocab())
+    _, vocab = get_wordvec(custom_labels=get_objects_vocab())
     nlp = get_nlp()
 
     dataset = Flickr30kDataset(

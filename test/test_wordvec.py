@@ -7,7 +7,7 @@ from weakvg.wordvec import WordvecBuilder, get_wordvec, get_objects_vocab
 
 class TestWordvec(unittest.TestCase):
     def test_get_wordvec(self):
-        wordvec, vocab = get_wordvec(dim=50, custom_tokens=[])
+        wordvec, vocab = get_wordvec(dim=50, custom_labels=[])
 
         self.assertEqual(len(vocab), 400000 + 1)  # +1 for padding
         self.assertEqual(len(wordvec), 400000 + 1)
@@ -60,12 +60,12 @@ class TestWordvecBuilder(unittest.TestCase):
         with self.assertRaises(AssertionError):
             WordvecBuilder().with_vocab()
 
-    def test_with_custom_tokens__known(self):
+    def test_with_custom_labels__known(self):
         b = (
             WordvecBuilder()
             .with_glove(**self.wv_kwargs)
             .with_vocab()
-            .with_custom_tokens(["microwave"])
+            .with_custom_labels(["microwave"])
         )
 
         wv = b.get_wordvec()
@@ -74,14 +74,14 @@ class TestWordvecBuilder(unittest.TestCase):
         self.assertEqual(len(wv), 400001)
         self.assertEqual(len(vocab), 400001)
 
-    def test_with_custom_tokens__unknown(self):
+    def test_with_custom_labels__unknown(self):
         sim = torch.cosine_similarity
 
         b = (
             WordvecBuilder()
             .with_glove(**self.wv_kwargs)
             .with_vocab()
-            .with_custom_tokens(["microwave oven"])
+            .with_custom_labels(["microwave oven"])
         )
 
         wv = b.get_wordvec()
@@ -100,13 +100,13 @@ class TestWordvecBuilder(unittest.TestCase):
         self.assertAlmostEqual(sim(wv["microwave oven"], wv["microwave"], dim=0).item(), 0.9121, places=4)
         self.assertAlmostEqual(sim(wv["microwave oven"], wv["oven"], dim=0).item(), 0.9370, places=4)
 
-    def test_with_custom_tokens__from_vocab(self):
+    def test_with_custom_labels__from_vocab(self):
         d = self.dim
         b = (
             WordvecBuilder()
             .with_glove(**self.wv_kwargs)
             .with_vocab()
-            .with_custom_tokens(get_objects_vocab())
+            .with_custom_labels(get_objects_vocab())
         )
 
         wv = b.get_wordvec()
@@ -118,13 +118,13 @@ class TestWordvecBuilder(unittest.TestCase):
         self.assertTrue(torch.equal(wv["the"], vecs[vocab["the"]]))
         self.assertTrue(torch.equal(wv["microwave,microwave oven"], vecs[vocab["microwave,microwave oven"]]))
 
-    def test_with_custom_tokens__not_breaking_prev_structure(self):
+    def test_with_custom_labels__not_breaking_prev_structure(self):
         d = self.dim
         b = (
             WordvecBuilder()
             .with_glove(**self.wv_kwargs)
             .with_vocab()
-            .with_custom_tokens(["microwave oven"])
+            .with_custom_labels(["microwave oven"])
         )
 
         wv = b.get_wordvec()

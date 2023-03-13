@@ -42,7 +42,7 @@ def main():
     pl.seed_everything(42, workers=True)
 
     tokenizer = get_tokenizer()
-    wordvec, vocab = get_wordvec(custom_tokens=get_objects_vocab())
+    wordvec, vocab = get_wordvec(custom_labels=get_objects_vocab())
     nlp = get_nlp()
 
     dataset = Flickr30kDataset(

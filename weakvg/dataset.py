@@ -679,7 +679,7 @@ if __name__ == "__main__":
     tokenizer = get_tokenizer()
     nlp = get_nlp()
     wordvec, vocab = get_wordvec(
-        custom_tokens=get_objects_vocab() if load_objects_vocab else []
+        custom_labels=get_objects_vocab() if load_objects_vocab else []
     )
 
     ds = Flickr30kDataset(

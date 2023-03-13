@@ -8,14 +8,14 @@ def get_wordvec(
     dim=300,
     *,
     cache="data/glove",
-    custom_tokens: List[str] = [],
+    custom_labels: List[str] = [],
     return_vocab=True,
 ):
     builder = (
         WordvecBuilder()
         .with_glove(name, dim, cache=cache)
         .with_vocab()
-        .with_custom_tokens(custom_tokens)
+        .with_custom_labels(custom_labels)
     )
 
     wordvec = builder.get_wordvec()
@@ -95,17 +95,17 @@ class WordvecBuilder:
 
         return self
 
-    def with_custom_tokens(self, tokens):
-        for token in tokens:
-            self._add_token(token)
+    def with_custom_labels(self, labels):
+        for label in labels:
+            self._add_label(label)
 
         return self
 
-    def _add_token(self, token):
-        if token in self.vocab:
+    def _add_label(self, label):
+        if label in self.vocab:
             return
 
-        parts = token.split(",")
+        parts = label.split(",")
         parts = [part.split(":")[-1] for part in parts]  # remove index encoding, if any
 
         embedding = self._find_embedding_for_parts(parts)
@@ -113,13 +113,13 @@ class WordvecBuilder:
         if embedding is None:
             return  # no embedding found
 
-        self.vocab.append_token(token)
+        self.vocab.append_token(label)
 
         self.wordvec.vectors = torch.cat(
             [self.wordvec.vectors, embedding.unsqueeze(0)], dim=0
         )
-        self.wordvec.itos.append(token)
-        self.wordvec.stoi[token] = len(self.wordvec.itos) - 1
+        self.wordvec.itos.append(label)
+        self.wordvec.stoi[label] = len(self.wordvec.itos) - 1
 
         self.n_added_tokens += 1
 

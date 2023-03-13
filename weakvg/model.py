@@ -22,7 +22,6 @@ class MyModel(pl.LightningModule):
         vocab,
         omega=0.5,
         neg_selection="random",
-        grounding="similarity",
     ) -> None:
         super().__init__()
         we = WordEmbedding(wordvec, vocab, freeze=False)
@@ -30,12 +29,7 @@ class MyModel(pl.LightningModule):
         self.concept_branch = ConceptBranch(word_embedding=we_freezed)
         self.visual_branch = VisualBranch(word_embedding=we)
         self.textual_branch = TextualBranch(word_embedding=we)
-
-        if grounding == "similarity":
-            self.prediction_module = SimilarityPredictionModule(omega=omega)
-        if grounding == "nn":
-            self.prediction_module = NeuralNetworkPredictionModule(omega=omega)
-
+        self.prediction_module = SimilarityPredictionModule(omega=omega)
         self.loss = Loss(word_embedding=we_freezed, neg_selection=neg_selection)
 
         self.save_hyperparameters(ignore=["wordvec", "vocab"])
@@ -269,51 +263,6 @@ class SimilarityPredictionModule(nn.Module):
         concepts_pred = self.softmax(concepts_pred)  # [b, q, b, p]
 
         return concepts_pred, concepts_mask
-
-    def apply_prior(self, predictions, prior):
-        w = self.omega
-
-        return w * predictions + (1 - w) * prior  # [b, q, b, p]
-
-
-class NeuralNetworkPredictionModule(nn.Module):
-    def __init__(self, omega):
-        super().__init__()
-        self.omega = omega
-        self.linear = nn.Linear(300 * 2, 1)
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, visual, textual, concepts):
-        visual_feat, visual_mask = visual  # [b, q, d], [b, q, 1]
-        textual_feat, textual_mask = textual  # [b, p, d], [b, p, 1]
-        concepts_pred, concepts_mask = concepts  # [b, q, b, p], [b, q, b, p]
-
-        b = textual_feat.shape[0]
-        q = textual_feat.shape[1]
-        p = visual_feat.shape[1]
-
-        visual_feat, visual_mask = ext_visual(visual_feat, visual_mask, b, q, p)
-        textual_feat, textual_mask = ext_textual(textual_feat, textual_mask, b, q, p)
-
-        multimodal_mask = visual_mask & textual_mask  # [b, q, b, p]
-
-        multimodal_feat = torch.cat(
-            (visual_feat, textual_feat), dim=-1
-        )  # [b, q, b, p, f], f = 2d
-
-        multimodal_pred = self.linear(multimodal_feat).squeeze(-1)  # [b, q, b, p]
-        multimodal_pred = mask_softmax(multimodal_pred, multimodal_mask)  # [b, q, b, p]
-        multimodal_pred = self.softmax(multimodal_pred)  # [b, q, b, p]
-
-        concepts_pred = mask_softmax(concepts_pred, concepts_mask)  # [b, q, b, p]
-        concepts_pred = self.softmax(concepts_pred)  # [b, q, b, p]
-
-        mask = multimodal_mask & concepts_mask  # [b, q, b, p]
-        scores = self.apply_prior(multimodal_pred, concepts_pred)  # [b, q, b, p]
-
-        scores = scores.masked_fill(~mask, 0)  # [b, q, b, p]
-
-        return scores, (multimodal_pred, concepts_pred)
 
     def apply_prior(self, predictions, prior):
         w = self.omega

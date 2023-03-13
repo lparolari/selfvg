@@ -103,13 +103,6 @@ def get_args():
         choices=["random", "textual_sim_max"],
         help="Strategy for negative example selection. Default: random",
     )
-    model_group.add_argument(
-        "--grounding",
-        type=str,
-        default="similarity",
-        choices=["similarity", "nn"],
-        help="Grounding strategy. Default: similarity",
-    )
 
     args = parser.parse_args()
 

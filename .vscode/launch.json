@@ -16,7 +16,6 @@
         "--logger=tensorboard",
         "--num_workers=12",
         "--neg_selection=textual_sim_max",
-        "--grounding=similarity",
         "--mode=train",
         // "--exp_id=dev",
         "--exp_notes=delete",

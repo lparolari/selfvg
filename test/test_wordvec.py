@@ -131,3 +131,49 @@ class TestWordvecBuilder(unittest.TestCase):
         vecs = wv.vectors
 
         self.assertTrue(torch.equal(vecs[0], torch.zeros(d)))
+
+    def test_with_custom_tokens__known(self):
+        d = self.dim
+        b = (
+            WordvecBuilder()
+            .with_glove(**self.wv_kwargs)
+            .with_vocab()
+            .with_custom_tokens(["dog"])
+        )
+
+        wv = b.get_wordvec()
+        vocab = b.get_vocab()
+
+        self.assertEqual(len(wv), 400000 + 1)  # +1 oov
+        self.assertEqual(len(vocab), 400000 + 1)
+    
+    def test_with_custom_tokens__unknown(self):
+        d = self.dim
+        b = (
+            WordvecBuilder()
+            .with_glove(**self.wv_kwargs)
+            .with_vocab()
+            .with_custom_tokens(["blabla"])
+        )
+
+        wv = b.get_wordvec()
+        vocab = b.get_vocab()
+
+        self.assertEqual(len(wv), 400000 + 1 + 1)  # +1 oov, +1 added
+        self.assertEqual(len(vocab), 400000 + 1 + 1)
+        self.assertTrue("blabla" in vocab)
+        self.assertTrue(~torch.equal(wv["blabla"], torch.zeros(d)))
+
+    def test_with_custom_tokens__not_breaking_prev_structure(self):
+        d = self.dim
+        b = (
+            WordvecBuilder()
+            .with_glove(**self.wv_kwargs)
+            .with_vocab()
+            .with_custom_labels(["microwave oven"])
+        )
+
+        wv = b.get_wordvec()
+        vecs = wv.vectors
+
+        self.assertTrue(torch.equal(vecs[0], torch.zeros(d)))

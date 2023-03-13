@@ -18,7 +18,10 @@ def main():
     pl.seed_everything(42, workers=True)
 
     tokenizer = get_tokenizer()
-    wordvec, vocab = get_wordvec(custom_labels=[] if args.dev else get_objects_vocab())
+    wordvec, vocab = get_wordvec(
+        custom_labels=[] if args.dev else get_objects_vocab(),
+        custom_tokens=[] if args.dev else get_objects_vocab("data/objects_vocab_merged.txt"),
+    )
     nlp = get_nlp()
 
     dm = Flickr30kDataModule(
@@ -44,7 +47,7 @@ def main():
             omega=args.omega,
             neg_selection=args.neg_selection,
         )
-    
+
     logging.info(f"Model hparams: " + json.dumps(model.hparams_initial, indent=4))
 
     logger = get_logger(args, model)

@@ -1,6 +1,8 @@
+import logging
 from typing import List
 
 import torch
+import torch.nn as nn
 
 
 def get_wordvec(
@@ -9,6 +11,7 @@ def get_wordvec(
     *,
     cache="data/glove",
     custom_labels: List[str] = [],
+    custom_tokens: List[str] = [],
     return_vocab=True,
 ):
     builder = (
@@ -16,10 +19,13 @@ def get_wordvec(
         .with_glove(name, dim, cache=cache)
         .with_vocab()
         .with_custom_labels(custom_labels)
+        .with_custom_tokens(custom_tokens)
     )
 
     wordvec = builder.get_wordvec()
     vocab = builder.get_vocab()
+
+    logging.info(f"Added {builder.n_added_tokens} custom tokens")
 
     if return_vocab:
         return wordvec, vocab
@@ -101,6 +107,12 @@ class WordvecBuilder:
 
         return self
 
+    def with_custom_tokens(self, tokens):
+        for token in tokens:
+            self._add_token(token)
+
+        return self
+
     def _add_label(self, label):
         if label in self.vocab:
             return
@@ -111,17 +123,18 @@ class WordvecBuilder:
         embedding = self._find_embedding_for_parts(parts)
 
         if embedding is None:
-            return  # no embedding found
+            return  # no embedding found, keep `label` oov
 
-        self.vocab.append_token(label)
+        self._append(label, embedding)
 
-        self.wordvec.vectors = torch.cat(
-            [self.wordvec.vectors, embedding.unsqueeze(0)], dim=0
-        )
-        self.wordvec.itos.append(label)
-        self.wordvec.stoi[label] = len(self.wordvec.itos) - 1
+    def _add_token(self, token):
+        if token in self.vocab:
+            return  # token already in vocab
+        
+        empty = torch.empty(1, self.wordvec.dim)  # xavier_normal_ requires 2 dim
+        embedding = nn.init.xavier_normal_(empty).reshape(-1)
 
-        self.n_added_tokens += 1
+        self._append(token, embedding)
 
     def _find_embedding_for_parts(self, parts):
         for part in parts:
@@ -152,3 +165,14 @@ class WordvecBuilder:
                     return part_emb
 
         return None
+
+    def _append(self, token, emb):
+        self.vocab.append_token(token)
+
+        self.wordvec.vectors = torch.cat(
+            [self.wordvec.vectors, emb.unsqueeze(0)], dim=0
+        )
+        self.wordvec.itos.append(token)
+        self.wordvec.stoi[token] = len(self.wordvec.itos) - 1
+
+        self.n_added_tokens += 1

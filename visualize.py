@@ -64,7 +64,7 @@ def main():
         collate_fn=collate_fn,
     )
 
-    model = MyModel.load_from_checkpoint(checkpoint, wordvec=wordvec, vocab=vocab)
+    model = MyModel.load_from_checkpoint(checkpoint, wordvec=wordvec, vocab=vocab, strict=False)
 
     for batch in dataloader:
         # forward the model

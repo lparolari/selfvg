@@ -55,28 +55,18 @@ class TestVisualBranch(unittest.TestCase):
 
     def test_spatial(self):
         proposals = torch.tensor([[[20, 20, 80, 100]]])  # [b, p, 4]
-        image_w = torch.tensor([500])
-        image_h = torch.tensor([335])
 
         visual_branch = VisualBranch(word_embedding=self.we)
 
-        spat = visual_branch.spatial(
-            {
-                "proposals": proposals,
-                "image_w": image_w,
-                "image_h": image_h,
-            }
-        )
+        spat = visual_branch.spatial({"proposals": proposals})
 
         self.assertEqual(spat.shape, (1, 1, 5))
 
-        self.assertAlmostEqual(spat[0, 0, 0].item(), 20 / 500)
-        self.assertAlmostEqual(spat[0, 0, 1].item(), 20 / 335)
-        self.assertAlmostEqual(spat[0, 0, 2].item(), 80 / 500)
-        self.assertAlmostEqual(spat[0, 0, 3].item(), 100 / 335)
-        self.assertAlmostEqual(
-            spat[0, 0, 4].item(), ((80 - 20) * (100 - 20)) / (500 * 335)
-        )
+        self.assertAlmostEqual(spat[0, 0, 0].item(), 20)
+        self.assertAlmostEqual(spat[0, 0, 1].item(), 20)
+        self.assertAlmostEqual(spat[0, 0, 2].item(), 80)
+        self.assertAlmostEqual(spat[0, 0, 3].item(), 100)
+        self.assertAlmostEqual(spat[0, 0, 4].item(), ((80 - 20) * (100 - 20)))
 
     def test_project(self):
         # please note that VisualBranch requires the `v` dimension to be 2048,

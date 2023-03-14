@@ -65,7 +65,7 @@ def main():
         trainer.fit(model, dm)
 
     if "test" in args.mode:
-        trainer.test(model, dm)
+        trainer.test(model, dm, ckpt_path="best")
 
 
 if __name__ == "__main__":

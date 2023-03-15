@@ -1,7 +1,7 @@
 import json
 import logging
 import pickle
-from typing import List
+from typing import List, Dict, Any
 
 import h5py
 import numpy as np
@@ -226,9 +226,11 @@ class RefsRepository:
     def __init__(self, refs_file):
         self.refs_file = refs_file
 
+        self.annid2idx: Dict[str, int] = {}
         self.data = None
 
         self._load()
+        self._build_annid2idx()
 
     def get_identifiers(self, split):
         return [
@@ -246,16 +248,14 @@ class RefsRepository:
         return ref["bbox"]
 
     def _get_ref(self, ann_id):
-        refs = [ref for ref in self.data if ref["ann_id"] == ann_id]
-
-        if len(refs) == 0:
-            raise ValueError(f"Annotation id '{ann_id}' not found")
-
-        if len(refs) > 1:
-            raise ValueError(f"Annotation id '{ann_id}' found multiple times")
-
-        return refs[0]
+        idx = self.annid2idx[ann_id]
+        ref = self.data[idx]
+        return ref
 
     def _load(self):
         with open(self.refs_file, "rb") as f:
             self.data = pickle.load(f)
+
+    def _build_annid2idx(self):
+        for i, ref in enumerate(self.data):
+            self.annid2idx[ref["ann_id"]] = i

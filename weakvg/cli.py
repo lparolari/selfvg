@@ -73,6 +73,12 @@ def get_args():
     # dataset params
     dataset_group = parser.add_argument_group("dataset arguments")
     dataset_group.add_argument(
+        "--dataset",
+        type=str,
+        choices=["flickr30k", "referit"],
+        required=True,
+    )
+    dataset_group.add_argument(
         "--batch_size", type=int, default=32, help="Batch size. Default: 32"
     )
     dataset_group.add_argument(

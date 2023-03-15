@@ -24,6 +24,7 @@ from weakvg.repo import (
     HeadsRepository,
     LabelsRepository,
 )
+from weakvg.referit import ReferitDataset
 
 Box = List[int]
 
@@ -141,17 +142,19 @@ class Flickr30kDatum:
 
     def get_labels(self) -> List[str]:
         return self.precomputed["objects_detection"].get_classes(self.identifier)
-    
+
     def get_labels_raw(self) -> List[str]:
         if not self._has_precomputed("labels"):
             return self.get_labels()
-    
-        return [self.precomputed["labels"].get_raw(label) for label in self.get_labels()]
+
+        return [
+            self.precomputed["labels"].get_raw(label) for label in self.get_labels()
+        ]
 
     def get_labels_syn(self) -> List[List[str]]:
         if not self._has_precomputed("labels"):
             return [[label] for label in self.get_labels()]
-    
+
         get_alternatives = self.precomputed["labels"].get_alternatives
 
         return [get_alternatives(label) for label in self.get_labels()]
@@ -506,10 +509,11 @@ class Flickr30kDataset(Dataset):
 
         return LabelsRepository.from_vocab(labels_file, alternatives_file)
 
+
 class Flickr30kDataModule(pl.LightningDataModule):
     def __init__(
         self,
-        data_dir,
+        dataset,
         tokenizer,
         vocab,
         nlp,
@@ -520,7 +524,11 @@ class Flickr30kDataModule(pl.LightningDataModule):
         **kwargs,
     ):
         super().__init__()
-        self.data_dir = data_dir
+
+        if dataset not in ["flickr30k", "referit"]:
+            raise ValueError(f"Unknown dataset {dataset}")
+
+        self.dataset = dataset
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.train_fraction = train_fraction
@@ -538,8 +546,11 @@ class Flickr30kDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage=None):
+        data_dir = self._get_data_dir()
+        dataset_cls = self._get_dataset_cls()
+
         dataset_kwargs = {
-            "data_dir": self.data_dir,
+            "data_dir": data_dir,
             "tokenizer": self.tokenizer,
             "vocab": self.vocab,
             "nlp": self.nlp,
@@ -547,13 +558,13 @@ class Flickr30kDataModule(pl.LightningDataModule):
         }
 
         if stage == "fit" or stage is None:
-            self.train_dataset = Flickr30kDataset(
+            self.train_dataset = dataset_cls(
                 split="val" if self.dev else "train", **dataset_kwargs
             )
-            self.val_dataset = Flickr30kDataset(split="val", **dataset_kwargs)
+            self.val_dataset = dataset_cls(split="val", **dataset_kwargs)
 
         if stage == "test" or stage is None:
-            self.test_dataset = Flickr30kDataset(split="test", **dataset_kwargs)
+            self.test_dataset = dataset_cls(split="test", **dataset_kwargs)
 
     def train_dataloader(self):
         return DataLoader(
@@ -567,6 +578,12 @@ class Flickr30kDataModule(pl.LightningDataModule):
         )
 
     def val_dataloader(self):
+        sampler = (
+            self._get_sampler(self.val_dataset, self.train_fraction)
+            if self.dev
+            else None
+        )
+
         return DataLoader(
             self.val_dataset,
             batch_size=self.batch_size,
@@ -574,7 +591,7 @@ class Flickr30kDataModule(pl.LightningDataModule):
             shuffle=False,
             pin_memory=True,
             drop_last=True,
-            sampler=self._get_sampler(self.val_dataset, self.train_fraction) if self.dev else None,
+            sampler=sampler,
             collate_fn=collate_fn,
         )
 
@@ -601,6 +618,18 @@ class Flickr30kDataModule(pl.LightningDataModule):
 
         return sampler
 
+    def _get_data_dir(self):
+        return {
+            "flickr30k": "data/flickr30k",
+            "referit": "data/referit",
+        }[self.dataset]
+
+    def _get_dataset_cls(self):
+        return {
+            "flickr30k": Flickr30kDataset,
+            "referit": ReferitDataset,
+        }[self.dataset]
+
 
 def collate_fn(batch):
     sentence_max_length = 32
@@ -622,7 +651,9 @@ def collate_fn(batch):
         "labels": pad_labels(batch["labels"], proposal_max_length),
         "attrs": pad_labels(batch["attrs"], proposal_max_length),
         "labels_raw": pad_labels(batch["labels_raw"], proposal_max_length),
-        "labels_syn": pad_labels_syn(batch["labels_syn"], proposal_max_length, label_alternatives_max_length),
+        "labels_syn": pad_labels_syn(
+            batch["labels_syn"], proposal_max_length, label_alternatives_max_length
+        ),
         "proposals_feat": pad_proposals(batch["proposals_feat"], proposal_max_length),
         "targets": pad_targets(batch["targets"]).float(),
     }

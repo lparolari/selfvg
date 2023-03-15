@@ -5,11 +5,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "main",
+      "name": "flickr",
       "type": "python",
       "request": "launch",
       "program": "main.py",
       "args": [
+        "--dataset=flickr30k",
         "--dev",
         "--batch_size=4",
         "--accelerator=cpu",
@@ -17,7 +18,30 @@
         "--num_workers=12",
         "--neg_selection=textual_sim_max",
         "--mode=train",
-        // "--exp_id=dev",
+        "--exp_notes=delete",
+        "--max_epochs=1",
+        "--train_fract=0.1",
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "HDF5_USE_FILE_LOCKING": "false"
+      }
+    },
+    {
+      "name": "referit",
+      "type": "python",
+      "request": "launch",
+      "program": "main.py",
+      "args": [
+        "--dataset=referit",
+        "--dev",
+        "--batch_size=4",
+        "--accelerator=cpu",
+        "--logger=tensorboard",
+        "--num_workers=12",
+        "--neg_selection=textual_sim_max",
+        "--mode=train",
         "--exp_notes=delete",
         "--max_epochs=1",
         "--train_fract=0.1",

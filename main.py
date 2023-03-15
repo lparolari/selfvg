@@ -20,12 +20,12 @@ def main():
     tokenizer = get_tokenizer()
     wordvec, vocab = get_wordvec(
         custom_labels=[] if args.dev else get_objects_vocab(),
-        custom_tokens=get_objects_vocab("data/objects_vocab_merged.txt"),
+        custom_tokens=[], #get_objects_vocab("data/objects_vocab_merged.txt"),
     )
     nlp = get_nlp()
 
     dm = Flickr30kDataModule(
-        data_dir="data/flickr30k",
+        dataset=args.dataset,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         train_fraction=args.train_fraction,

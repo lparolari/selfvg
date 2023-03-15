@@ -56,6 +56,26 @@ class ObjectsFeatureRepository:
         return self.features[pos[0] : pos[1]]
 
 
+class ObjectsFeature2Repository:
+    def __init__(self, id2idx_path, objects_feature_path) -> None:
+        logging.debug(f"Loading imgid2idx at {id2idx_path}...")
+
+        with open(id2idx_path, "rb") as f:
+            self.id2idx = pickle.load(f)
+
+        logging.debug(f"Loading objects feature at {objects_feature_path}...")
+
+        with h5py.File(objects_feature_path, "r") as hf:
+            # print(hf.keys()) 	#<KeysViewHDF5 ['image_bb', 'image_features', 'pos_boxes', 'spatial_features']>
+            self.features = np.array(hf.get("image_features"))
+            self.positions = np.array(hf.get("pos_boxes"))
+
+    def get_feature(self, identifier):
+        idx = self.id2idx[identifier]
+        pos = self.positions[idx]
+        return self.features[pos[0] : pos[1]]
+
+
 class HeadsRepository:
     def __init__(self, heads_path) -> None:
         logging.debug(f"Loading heads at {heads_path}...")
@@ -173,3 +193,69 @@ class LabelsRepository:
         # assert len(old_labels) == len(map_fn)
         # print(old_labels[1590], map_fn[1590], cleaned_labels[map_fn[1590]])
         return map_fn, cleaned_labels, old_labels  # all in [1, 1600]
+
+
+class AnnotationsRepository:
+    def __init__(self, annotations_file):
+        self.annotations_file = annotations_file
+
+        self.annotations: List[Dict[str, Any]] = []
+        """An array of annotations"""
+
+        self.annid2idx: Dict[str, int] = {}
+        """A dictionary that maps `ann_id` to its corresponding index in `self.annotations`"""
+
+        self._load()
+        self._build_annid2idx()
+
+    def get_target(self, ann_id):
+        idx = self.annid2idx[ann_id]
+        return self.annotations[idx]["bbox"]
+
+    def _load(self):
+        with open(self.annotations_file) as f:
+            data = json.load(f)
+            self.annotations = data["annotations"]
+
+    def _build_annid2idx(self):
+        for i, ann in enumerate(self.annotations):
+            self.annid2idx[ann["id"]] = i
+
+
+class RefsRepository:
+    def __init__(self, refs_file):
+        self.refs_file = refs_file
+
+        self.data = None
+
+        self._load()
+
+    def get_identifiers(self, split):
+        return [
+            (ref["image_id"], ref["ann_id"])
+            for ref in self.data
+            if ref["split"] == split
+        ]
+
+    def get_queries(self, ann_id):
+        ref = self._get_ref(ann_id)
+        return [sentence["raw"].strip().lower() for sentence in ref["sentences"]]
+
+    def get_target(self, ann_id):
+        ref = self._get_ref(ann_id)
+        return ref["bbox"]
+
+    def _get_ref(self, ann_id):
+        refs = [ref for ref in self.data if ref["ann_id"] == ann_id]
+
+        if len(refs) == 0:
+            raise ValueError(f"Annotation id '{ann_id}' not found")
+
+        if len(refs) > 1:
+            raise ValueError(f"Annotation id '{ann_id}' found multiple times")
+
+        return refs[0]
+
+    def _load(self):
+        with open(self.refs_file, "rb") as f:
+            self.data = pickle.load(f)

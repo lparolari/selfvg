@@ -163,10 +163,8 @@ class ReferitDatum:
         return self.precomputed["objects_feature"].get_feature(self.image_id)
 
     def get_targets(self):
-        return [
-            self._pre("annotations").get_target(self.ann_id)
-            for _ in range(len(self.get_queries()))
-        ]
+        x, y, w, h = self._pre("annotations").get_target(self.ann_id)
+        return [[x, y, x + w, y + h] for _ in range(len(self.get_queries()))]
 
     def __str__(self):
         return f"ReferitDatum(image_id={self.image_id}, ann_id={self.ann_id})"
@@ -219,7 +217,7 @@ class ReferitDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
 
-        # ann_id can't be part of meta because it is a string and 
+        # ann_id can't be part of meta because it is a string and
         # can't be represented in a tensor
         meta = [idx, sample.image_id]
 
@@ -299,7 +297,7 @@ class ReferitDataset(Dataset):
         self.identifiers = [
             (image_id, ann_id)
             for image_id, ann_id in self.identifiers
-            if self._is_blacklisted(image_id)
+            if not self._is_blacklisted(image_id)
         ]
 
     def _prepare_sentence(self, sentence: str) -> List[int]:

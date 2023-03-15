@@ -32,8 +32,11 @@ class TestWordEmbedding(unittest.TestCase):
 
 
 class TestTextualBranch(unittest.TestCase):
-    wordvec, vocab = get_wordvec()
-    we = WordEmbedding(wordvec, vocab)
+    def setUp(self):
+        super().setUp()
+
+        self.wordvec, self.vocab = get_wordvec()
+        self.we = WordEmbedding(self.wordvec, self.vocab)
 
     def test_lstm(self):
         queries_idx = [
@@ -50,8 +53,11 @@ class TestTextualBranch(unittest.TestCase):
 
 
 class TestVisualBranch(unittest.TestCase):
-    wordvec, vocab = get_wordvec()
-    we = WordEmbedding(wordvec, vocab)
+    def setUp(self):
+        super().setUp()
+
+        self.wordvec, self.vocab = get_wordvec()
+        self.we = WordEmbedding(self.wordvec, self.vocab)
 
     def test_spatial(self):
         proposals = torch.tensor([[[20, 20, 80, 100]]])  # [b, p, 4]
@@ -84,8 +90,11 @@ class TestVisualBranch(unittest.TestCase):
 
 
 class TestConceptBranch(unittest.TestCase):
-    wordvec, vocab = get_wordvec()
-    we = WordEmbedding(wordvec, vocab)
+    def setUp(self):
+        super().setUp()
+
+        self.wordvec, self.vocab = get_wordvec()
+        self.we = WordEmbedding(self.wordvec, self.vocab)
 
     def test_forward(self):
         heads = torch.tensor(

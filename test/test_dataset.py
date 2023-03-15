@@ -48,17 +48,20 @@ class TestFlickr30kDataset(unittest.TestCase):
 
 
 class TestFlickr30kDatum(unittest.TestCase):
-    dataset = _make_dataset("test")
+    def setUp(self):
+        super().setUp()
 
-    images_size = dataset._open_images_size()
-    objects_detection = dataset._open_objects_detection()
-    objects_feature = dataset._open_objects_feature()
+        dataset = _make_dataset("test")
 
-    precomputed = {
-        "images_size": images_size,
-        "objects_detection": objects_detection,
-        "objects_feature": objects_feature,
-    }
+        images_size = dataset._open_images_size()
+        objects_detection = dataset._open_objects_detection()
+        objects_feature = dataset._open_objects_feature()
+
+        self.precomputed = {
+            "images_size": images_size,
+            "objects_detection": objects_detection,
+            "objects_feature": objects_feature,
+        }
 
     def test_get_sentences_ann(self):
         sample = self._make_sample()

@@ -156,6 +156,21 @@ class Flickr30kDatum:
             self.identifier
         )  # [x, 2048]
 
+    def get_locations(self, sentence_id, query_id=None) -> List[List[int]]:
+        n_locations = 6
+
+        a_slice = slice(query_id, query_id and query_id + 1)
+        queries = self.get_queries(sentence_id, query_id)
+
+        return [[1 for _ in range(n_locations)] for _ in range(len(queries))][a_slice]
+
+    def get_relations(self) -> List[List[int]]:
+        n_relations = 6
+
+        proposals = self.get_proposals()
+
+        return [[1 for _ in range(n_relations)] for _ in range(len(proposals))]
+
     def has_queries_for(self, sentence_id) -> bool:
         return len(self.get_queries(sentence_id)) > 0
 
@@ -188,6 +203,9 @@ class Flickr30kDatum:
                 "proposals_feat": self.get_proposals_feat(),
                 # targets
                 "targets": self.get_targets(sentence_id),
+                # relations
+                "locations": self.get_locations(sentence_id),
+                "relations": self.get_relations(),
             }
 
     def _get_sentences_file(self) -> str:
@@ -328,6 +346,8 @@ class Flickr30kDataset(Dataset, UpperboundAccuracyMixin, QueryNumberMixin):
         labels_syn = self._prepare_labels_syn(sample["labels_syn"])
         proposals_feat = sample["proposals_feat"]
         targets = self._prepare_targets(sample["targets"])
+        locations = sample["locations"]
+        relations = sample["relations"]
 
         assert len(queries) == len(
             targets
@@ -356,6 +376,8 @@ class Flickr30kDataset(Dataset, UpperboundAccuracyMixin, QueryNumberMixin):
             "labels_syn": labels_syn,
             "proposals_feat": proposals_feat,
             "targets": targets,
+            "locations": locations,
+            "relations": relations,
         }
 
         if self.transform:

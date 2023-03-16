@@ -8,6 +8,7 @@ from weakvg.dataset import Flickr30kDataset, ReferitDataset
 from weakvg.padding import (
     pad_labels,
     pad_labels_syn,
+    pad_locations,
     pad_proposals,
     pad_queries,
     pad_sentence,
@@ -140,6 +141,7 @@ class WeakvgDataModule(pl.LightningDataModule):
 
 def collate_fn(batch):
     sentence_max_length = 32
+    query_max_num = 32
     query_max_length = 12
     head_max_length = 5
     proposal_max_length = 100
@@ -150,8 +152,8 @@ def collate_fn(batch):
     return {
         "meta": torch.tensor(batch["meta"]),
         "sentence": pad_sentence(batch["sentence"], sentence_max_length).long(),
-        "queries": pad_queries(batch["queries"], query_max_length).long(),
-        "heads": pad_queries(batch["heads"], head_max_length).long(),
+        "queries": pad_queries(batch["queries"], query_max_num, query_max_length).long(),
+        "heads": pad_queries(batch["heads"], query_max_num, head_max_length).long(),
         "image_w": torch.tensor(batch["image_w"]),
         "image_h": torch.tensor(batch["image_h"]),
         "proposals": pad_proposals(batch["proposals"], proposal_max_length).float(),
@@ -162,7 +164,9 @@ def collate_fn(batch):
             batch["labels_syn"], proposal_max_length, label_alternatives_max_length
         ),
         "proposals_feat": pad_proposals(batch["proposals_feat"], proposal_max_length),
-        "targets": pad_targets(batch["targets"]).float(),
+        "targets": pad_targets(batch["targets"], query_max_num).float(),
+        "locations": pad_locations(batch["locations"], query_max_num).long(),
+        "relations": pad_proposals(batch["relations"], proposal_max_length).long(),
     }
 
 

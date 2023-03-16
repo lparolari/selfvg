@@ -11,6 +11,7 @@ from weakvg.masking import (
     get_queries_count,
     get_queries_mask,
     get_queries_mask_,
+    get_relations_mask_,
 )
 from weakvg.utils import ext_textual, ext_visual, iou, mask_softmax, tlbr2ctwh
 
@@ -43,7 +44,8 @@ class WeakvgModel(pl.LightningModule):
 
         visual_mask = get_proposals_mask_(x)  # [b, p]
         textual_mask = get_queries_mask_(x)[1]  # [b, q]
-        concepts_mask = get_concepts_mask_(x)  # [b, q, b, p]
+        relations_mask = get_relations_mask_(x)  # [b, q, b, p]
+        concepts_mask = get_concepts_mask_(x).logical_and(relations_mask)  # [b, q, b, p]
 
         scores, (multimodal_scores, concepts_scores) = self.prediction_module(
             (visual_feat, visual_mask),
@@ -55,7 +57,7 @@ class WeakvgModel(pl.LightningModule):
 
         return scores, (multimodal_scores, concepts_scores)
 
-    def step(self, batch, batch_id):
+    def step(self, batch, batch_idx):
         """
         :return: A tuple `(loss, metrics)`, where metrics is a dict with `acc`, `point_it`
         """

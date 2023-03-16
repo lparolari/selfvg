@@ -1,6 +1,6 @@
 import unittest
 
-from weakvg.padding import pad_labels_syn
+from weakvg.padding import *
 
 
 class TestPadding(unittest.TestCase):
@@ -46,7 +46,9 @@ class TestPadding(unittest.TestCase):
             ],
         ]
 
-        padded_labels_syn = pad_labels_syn(labels_syn, max_labels_length=4, max_alternatives_length=2)
+        padded_labels_syn = pad_labels_syn(
+            labels_syn, max_labels_length=4, max_alternatives_length=2
+        )
 
         self.assertEqual(padded_labels_syn.shape, (1, 3, 2))  # [b, p, a]
 
@@ -61,6 +63,24 @@ class TestPadding(unittest.TestCase):
             ],
         ]
 
-        padded_labels_syn = pad_labels_syn(labels_syn, max_labels_length=2, max_alternatives_length=3)
+        padded_labels_syn = pad_labels_syn(
+            labels_syn, max_labels_length=2, max_alternatives_length=3
+        )
 
         self.assertEqual(padded_labels_syn.shape, (1, 2, 3))  # [b, p, a]
+
+    def test_pad_locations(self):
+        locations = [
+            [  # batch b1
+                [1, 0, 0, 0, 1, 0],  # q1 for b1 (with 6 locations)
+                [0, 1, 0, 0, 0, 1],  # q2
+                [1, 1, 1, 1, 1, 1],  # q3
+            ],
+            [  # batch b2
+                [0, 0, 0, 0, 0, 0],  # q1 for b2
+            ],
+        ]
+
+        padded_locations = pad_locations(locations, max_locations_num=2)
+
+        self.assertEqual(padded_locations.shape, (2, 2, 6))  # [b, q, r]

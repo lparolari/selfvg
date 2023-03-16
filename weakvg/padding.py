@@ -21,7 +21,7 @@ def pad_sentence(b: List[Sentence], max_sentence_length: int, *, padding_value=0
     return b
 
 
-def pad_queries(b: List[Queries], max_query_length: int, *, val=0):
+def pad_queries(b: List[Queries], max_query_num=None, max_query_length=None, *, val=0):
     to_tensor = lambda qs: [torch.tensor(q) for q in qs]
     cap_length = lambda qs: [q[..., :max_query_length] for q in qs]
     pad_smaller = lambda qs: [
@@ -33,6 +33,7 @@ def pad_queries(b: List[Queries], max_query_length: int, *, val=0):
     b = [pad_smaller(qs) for qs in b]
     b = [torch.stack(qs) for qs in b]
     b = pad_sequence(b, batch_first=True, padding_value=val)
+    b = b[..., :max_query_num, :max_query_length]
 
     return b
 
@@ -51,7 +52,9 @@ def pad_labels(b: List[Labels], max_labels_length, *, val=0):
     return b
 
 
-def pad_labels_syn(b: List[LabelsSyn], max_labels_length, max_alternatives_length, *, val=0):
+def pad_labels_syn(
+    b: List[LabelsSyn], max_labels_length, max_alternatives_length, *, val=0
+):
     to_tensor = lambda ls: [torch.tensor(l) for l in ls]
     cap_alternatives = lambda ls: [l[..., :max_alternatives_length] for l in ls]
     cap_labels = lambda ls: ls[:max_labels_length]
@@ -74,11 +77,19 @@ def pad_labels_syn(b: List[LabelsSyn], max_labels_length, max_alternatives_lengt
     return b
 
 
-def pad_targets(b, *, val=0):
+def pad_targets(b, max_targets_num=None, *, val=0):
     to_tensor = lambda ts: [torch.tensor(t) for t in ts]
 
     b = [to_tensor(qs) for qs in b]
     b = [torch.stack(qs) for qs in b]
     b = pad_sequence(b, batch_first=True, padding_value=val)
+    b = b[..., :max_targets_num, :]
 
+    return b
+
+
+def pad_locations(b, max_locations_num=None, *, val=0):
+    b = [torch.tensor(p) for p in b]
+    b = pad_sequence(b, batch_first=True, padding_value=val)
+    b = b[..., :max_locations_num, :]
     return b

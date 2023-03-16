@@ -129,3 +129,34 @@ def get_mask_(x):
     labels = x["labels"]
 
     return get_mask(queries, proposals, heads, labels)
+
+
+def get_relations_mask(locations, relations):
+    """
+    :param locations: A tensor with shape `[b, q, r]`
+    :param relations: A tensor with shape `[b, p, r]`
+    :return: A boolean tensor with shape `[b, q, b, p]`
+    """
+    b = locations.shape[0]
+    q = locations.shape[1]
+    p = relations.shape[1]
+
+    locations = locations.reshape(b, q, 1, 1, -1).repeat(1, 1, b, p, 1)
+    relations = relations.reshape(1, 1, b, p, -1).repeat(b, q, 1, 1, 1)
+
+    spatial = locations * relations  # [b, q, b, p, r]
+    spatial = spatial.sum(-1)  # [b, q, b, p]
+    spatial = spatial >= 1  # [b, q, b, p]
+
+    return spatial
+
+
+def get_relations_mask_(x):
+    """
+    :param x: A dict with keys `locations`, `relations`
+    :return: A boolean tensor with shape `[b, q, b, p]`
+    """
+    locations = x["locations"]
+    relations = x["relations"]
+
+    return get_relations_mask(locations, relations)

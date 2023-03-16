@@ -7,8 +7,7 @@ import sys
 # allow the script to be run from the root directory
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from weakvg.dataset import Flickr30kDataset
-from weakvg.referit import ReferitDataset
+from weakvg.dataset import Flickr30kDataset, ReferitDataset
 from weakvg.wordvec import get_nlp, get_objects_vocab, get_tokenizer, get_wordvec
 
 

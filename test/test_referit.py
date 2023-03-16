@@ -1,7 +1,7 @@
 import unittest
 
 from weakvg import repo
-from weakvg.referit import ReferitDataset
+from weakvg.dataset.referit import ReferitDataset
 from weakvg.wordvec import get_tokenizer, get_wordvec
 
 

@@ -15,7 +15,7 @@ from weakvg.masking import (
 from weakvg.utils import ext_textual, ext_visual, iou, mask_softmax, tlbr2ctwh
 
 
-class MyModel(pl.LightningModule):
+class WeakvgModel(pl.LightningModule):
     def __init__(
         self,
         wordvec,

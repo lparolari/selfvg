@@ -4,6 +4,7 @@ from typing import List
 
 from torch.utils.data import Dataset
 
+from weakvg.dataset.mixin import UpperboundAccuracyMixin, QueryNumberMixin
 from weakvg.repo import (
     AnnotationsRepository,
     HeadsRepository,
@@ -181,7 +182,7 @@ class ReferitDatum:
         return key in self.precomputed and self.precomputed[key] is not None
 
 
-class ReferitDataset(Dataset):
+class ReferitDataset(Dataset, UpperboundAccuracyMixin, QueryNumberMixin):
     def __init__(
         self,
         split,
@@ -269,6 +270,23 @@ class ReferitDataset(Dataset):
 
         self.data = data
         self.samples = samples
+
+    def print_statistics(self):
+        print(f"ReferIt ({self.split})")
+        print(f"Number of images-sentences pairs: {len(self.data)}")
+        print(f"Number of samples: {len(self)}")
+        print(f"Upperbound accuracy: {self.get_upperbound_accuracy() * 100:.2f}%")
+        print(f"Min number of queries: {self.get_min_query_number()}")
+        print(f"Max number of queries: {self.get_max_query_number()}")
+        print(f"Avg number of queries: {self.get_avg_query_number():.2f}")
+
+    def get_image_path(self, image_id):
+        image_id_str = str(image_id)
+        image_id_str = image_id_str.zfill(5)
+
+        image_id_part1 = image_id_str[:2]
+
+        return f"{self.data_dir}/refer/data/images/saiapr_tc-12/{image_id_part1}/images/{image_id}.jpg"
 
     def _load_identifiers(self):
         """
@@ -391,7 +409,4 @@ if __name__ == "__main__":
 
     referit = ReferitDataset(split, "data/referit", tokenizer, vocab, nlp)
 
-    print(len(referit))
-    print(referit.data[0])
-    print(referit.data[1])
-    print(referit.data[2])
+    referit.print_statistics()

@@ -4,8 +4,8 @@ import logging
 import pytorch_lightning as pl
 
 from weakvg.cli import get_args, get_callbacks, get_logger
-from weakvg.dataset import Flickr30kDataModule
-from weakvg.model import MyModel
+from weakvg.datamodule import WeakvgDataModule
+from weakvg.model import WeakvgModel
 from weakvg.wordvec import get_nlp, get_objects_vocab, get_tokenizer, get_wordvec
 
 
@@ -24,7 +24,7 @@ def main():
     )
     nlp = get_nlp()
 
-    dm = Flickr30kDataModule(
+    dm = WeakvgDataModule(
         dataset=args.dataset,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -36,12 +36,12 @@ def main():
     )
 
     if args.checkpoint:
-        model = MyModel.load_from_checkpoint(
-            args.checkpoint, wordvec=wordvec, vocab=vocab
+        model = WeakvgModel.load_from_checkpoint(
+            args.checkpoint, wordvec=wordvec, vocab=vocab, strict=False
         )
         logging.info(f"Loaded model at {args.checkpoint}")
     else:
-        model = MyModel(
+        model = WeakvgModel(
             wordvec,
             vocab,
             omega=args.omega,
@@ -65,7 +65,7 @@ def main():
         trainer.fit(model, dm)
 
     if "test" in args.mode:
-        trainer.test(model, dm, ckpt_path="best")
+        trainer.test(model, dm) #, ckpt_path="best")
 
 
 if __name__ == "__main__":

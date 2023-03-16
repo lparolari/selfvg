@@ -53,11 +53,12 @@
       }
     },
     {
-      "name": "main (checkpoint)",
+      "name": "referit (checkpoint)",
       "type": "python",
       "request": "launch",
       "program": "main.py",
       "args": [
+        "--dataset=referit",
         "--batch_size=4",
         "--accelerator=cpu",
         "--logger=tensorboard",
@@ -76,7 +77,7 @@
       "type": "python",
       "request": "launch",
       "program": "visualize.py",
-      "args": ["--checkpoint=output/model.ckpt"],
+      "args": ["--checkpoint=output/model.ckpt", "--dataset=referit"],
       "console": "integratedTerminal",
       "justMyCode": true,
       "env": {

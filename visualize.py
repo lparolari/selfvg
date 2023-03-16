@@ -10,8 +10,9 @@ import numpy as np
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from weakvg.dataset import Flickr30kDataset, NormalizeCoord, collate_fn
-from weakvg.model import MyModel
+from weakvg.dataset import Flickr30kDataset, ReferitDataset
+from weakvg.datamodule import WeakvgDataModule, NormalizeCoord, collate_fn
+from weakvg.model import WeakvgModel
 from weakvg.wordvec import get_nlp, get_objects_vocab, get_tokenizer, get_wordvec
 
 vocab = None
@@ -28,12 +29,14 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", type=str, default=None, required=True)
+    parser.add_argument("--dataset", type=str, required=True, choices=["flickr30k", "referit"])
     parser.add_argument("--split", type=str, default="val")
     parser.add_argument("--search", type=str, default=None)
     parser.add_argument("--show_proposals", action="store_true", default=False)
 
     args = parser.parse_args()
 
+    dataset_name = args.dataset
     checkpoint = args.checkpoint
     search = args.search
     split = args.split
@@ -45,9 +48,12 @@ def main():
     wordvec, vocab = get_wordvec(custom_labels=get_objects_vocab())
     nlp = get_nlp()
 
-    dataset = Flickr30kDataset(
+    dataset_cls = WeakvgDataModule.get_dataset_cls(dataset_name)
+    data_dir = WeakvgDataModule.get_data_dir(dataset_name)
+
+    dataset = dataset_cls(
         split=split,
-        data_dir="data/flickr30k",
+        data_dir=data_dir,
         tokenizer=tokenizer,
         vocab=vocab,
         nlp=nlp,
@@ -64,7 +70,7 @@ def main():
         collate_fn=collate_fn,
     )
 
-    model = MyModel.load_from_checkpoint(checkpoint, wordvec=wordvec, vocab=vocab, strict=False)
+    model = WeakvgModel.load_from_checkpoint(checkpoint, wordvec=wordvec, vocab=vocab, strict=False)
 
     for batch in dataloader:
         # forward the model
@@ -120,7 +126,7 @@ def main():
         coverage_candidates_label = np.take(labels, coverage_candidates_idx, axis=0)
 
         # get the image to show on plot
-        image = get_image(identifier)
+        image = get_image(dataset.get_image_path(identifier))
 
         gt_color = np.array([255, 102, 102]) / 255  # #ff6666 (red)
         model_color = np.array([153, 255, 153]) / 255  # #99ff99 (green)
@@ -231,9 +237,7 @@ def unbatch(x):
     return x[0].cpu().numpy()
 
 
-def get_image(identifier):
-    path = f"data/flickr30k/flickr30k_images/{identifier}.jpg"
-
+def get_image(path):
     im = cv2.imread(path)
     im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
 

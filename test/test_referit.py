@@ -43,6 +43,8 @@ class TestReferitDataset(unittest.TestCase):
                 "labels_syn",
                 "proposals_feat",
                 "targets",
+                "locations",
+                "relations",
             ]
         )
 
@@ -57,7 +59,7 @@ class TestReferitDataset(unittest.TestCase):
         self.assertEqual(self._txt(x["sentence"]), "person on the left")
         self.assertEqual(self._txt(x["queries"][0]), "person on the left")
         self.assertEqual(self._txt(x["heads"][0]), "person")
-        self.assertListEqual(x["targets"][0], [156.0, 169.0, 68.0, 191.0])
+        self.assertListEqual(x["targets"][0], [156.0, 169.0, 224.0, 360.0])
         self.assertEqual(x["image_w"], 480)
         self.assertEqual(x["image_h"], 360)
         self.assertEqual(len(x["proposals"]), 30)

@@ -9,6 +9,7 @@ class TestWeakvgDataModule(unittest.TestCase):
         _, vocab = get_wordvec()
 
         dm = WeakvgDataModule(
+            dataset="flickr30k",
             data_dir="data/flickr30k",
             batch_size=2,
             num_workers=1,

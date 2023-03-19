@@ -73,11 +73,11 @@
       }
     },
     {
-      "name": "visualize",
+      "name": "referit (visualize)",
       "type": "python",
       "request": "launch",
       "program": "visualize.py",
-      "args": ["--checkpoint=output/model.ckpt", "--dataset=referit"],
+      "args": ["--checkpoint=output/referit.ckpt", "--dataset=referit"],
       "console": "integratedTerminal",
       "justMyCode": true,
       "env": {

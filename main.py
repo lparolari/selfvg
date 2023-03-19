@@ -61,11 +61,12 @@ def main():
         callbacks=callbacks,
     )
 
-    if "train" in args.mode:
+    if args.mode == "train":
         trainer.fit(model, dm)
+        trainer.test(model, dm, ckpt_path="best")
 
-    if "test" in args.mode:
-        trainer.test(model, dm) #, ckpt_path="best")
+    if args.mode == "test":
+        trainer.test(model, dm)
 
 
 if __name__ == "__main__":

@@ -23,8 +23,10 @@ class WeakvgModel(pl.LightningModule):
         vocab,
         omega=0.5,
         neg_selection="random",
+        use_relations=False,
     ) -> None:
         super().__init__()
+        self.use_relations = use_relations
         we = WordEmbedding(wordvec, vocab, freeze=False)
         we_freezed = WordEmbedding(wordvec, vocab, freeze=True)
         self.concept_branch = ConceptBranch(word_embedding=we_freezed)
@@ -44,8 +46,11 @@ class WeakvgModel(pl.LightningModule):
 
         visual_mask = get_proposals_mask_(x)  # [b, p]
         textual_mask = get_queries_mask_(x)[1]  # [b, q]
-        relations_mask = get_relations_mask_(x)  # [b, q, b, p]
-        concepts_mask = get_concepts_mask_(x).logical_and(relations_mask)  # [b, q, b, p]
+        concepts_mask = get_concepts_mask_(x)  # [b, q, b, p]
+
+        if self.use_relations:
+            relations_mask = get_relations_mask_(x)  # [b, q, b, p]
+            concepts_mask = concepts_mask.logical_and(relations_mask)  # [b, q, b, p]
 
         scores, (multimodal_scores, concepts_scores) = self.prediction_module(
             (visual_feat, visual_mask),

@@ -93,13 +93,13 @@ def get_args():
     # model params
     model_group = parser.add_argument_group("dataset arguments")
     model_group.add_argument(
+        "--checkpoint", type=str, default=None, help="Checkpoint to load. Default: None"
+    )
+    model_group.add_argument(
         "--omega",
         type=float,
         default=0.5,
         help="Weight for the network prediction. Default: 0.5",
-    )
-    model_group.add_argument(
-        "--checkpoint", type=str, default=None, help="Checkpoint to load. Default: None"
     )
     model_group.add_argument(
         "--neg_selection",
@@ -107,6 +107,12 @@ def get_args():
         default="random",
         choices=["random", "textual_sim_max"],
         help="Strategy for negative example selection. Default: random",
+    )
+    model_group.add_argument(
+        "--use_relations",
+        default=False,
+        action="store_true",
+        help="Enable the attention mask based on relations. Default: false",
     )
 
     args = parser.parse_args()

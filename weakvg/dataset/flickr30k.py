@@ -157,8 +157,10 @@ class Flickr30kDatum:
             self.identifier
         )  # [x, 2048]
 
-    def get_locations(self):
-        return get_locations(self.get_queries())
+    def get_locations(self, sentence_id, query_id=None) -> List[List[int]]:
+        queries = self.get_queries(sentence_id, query_id)
+        a_slice = slice(query_id, query_id and query_id + 1)
+        return get_locations(queries)[a_slice]
 
     def get_relations(self):
         proposals = self.get_proposals()

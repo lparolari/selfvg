@@ -14,6 +14,7 @@ from weakvg.repo import (
     ObjectsDetectionRepository,
     ObjectsFeatureRepository,
 )
+from weakvg.dataset.shared import get_locations, get_relations
 
 Box = List[int]
 
@@ -156,20 +157,14 @@ class Flickr30kDatum:
             self.identifier
         )  # [x, 2048]
 
-    def get_locations(self, sentence_id, query_id=None) -> List[List[int]]:
-        n_locations = 6
+    def get_locations(self):
+        return get_locations(self.get_queries())
 
-        a_slice = slice(query_id, query_id and query_id + 1)
-        queries = self.get_queries(sentence_id, query_id)
-
-        return [[1 for _ in range(n_locations)] for _ in range(len(queries))][a_slice]
-
-    def get_relations(self) -> List[List[int]]:
-        n_relations = 6
-
+    def get_relations(self):
         proposals = self.get_proposals()
+        labels = self.get_labels()
 
-        return [[1 for _ in range(n_relations)] for _ in range(len(proposals))]
+        return get_relations(proposals, labels)
 
     def has_queries_for(self, sentence_id) -> bool:
         return len(self.get_queries(sentence_id)) > 0

@@ -27,6 +27,12 @@ def get_args():
         help="Experiment tags. Default: None",
     )
     exp_group.add_argument(
+        "--exp_group",
+        type=str,
+        default=None,
+        help="Experiment group. Default: None",
+    )
+    exp_group.add_argument(
         "--mode",
         type=str,
         choices=["train", "test"],
@@ -147,14 +153,15 @@ def get_logger(args, model=None):
             name=args.exp_id,
             notes=args.exp_notes,
             tags=args.exp_tags,
+            group=args.exp_group,
             settings=wandb.Settings(start_method="fork"),
         )
 
         # we use the `logger.version` to be coherent with wandb naming.
         # please note that
         #
-        #  * `logger.version` is the experiment id in the wandb logger 
-        #    (`logger.experiment.id`), i.e. a random string like `9n17vs3z`. 
+        #  * `logger.version` is the experiment id in the wandb logger
+        #    (`logger.experiment.id`), i.e. a random string like `9n17vs3z`.
         #
         #  * the wandb experiment name like `frosty-grass-69` can be found
         #    at `logger.experiment.name` instead.
@@ -163,7 +170,15 @@ def get_logger(args, model=None):
         args_to_log = copy.deepcopy(args)
 
         # remove args that do not belong to experiment config
-        to_remove = ["exp_id", "exp_notes", "exp_tags", "verbose", "logger", "dev"]
+        to_remove = [
+            "exp_id",
+            "exp_notes",
+            "exp_tags",
+            "exp_group",
+            "verbose",
+            "logger",
+            "dev",
+        ]
 
         for key in to_remove:
             delattr(args_to_log, key)

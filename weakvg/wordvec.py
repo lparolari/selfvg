@@ -76,7 +76,7 @@ class WordvecBuilder:
 
         return self
 
-    def with_vocab(self, unk_token="<unk>"):
+    def with_vocab(self, pad_token="<pad>", unk_token="<unk>"):
         """
         Build a vocab using GloVe tokens
         """
@@ -87,16 +87,27 @@ class WordvecBuilder:
         # min_freq=0 is required to include the first token in `wordvec.stoi` which has index 0
         # the `make_vocab` function requires an ordered dict as input and discards entries
         # whose value is less than `min_freq`
-        self.vocab = make_vocab(self.wordvec.stoi, specials=[unk_token], special_first=True, min_freq=0)
+        self.vocab = make_vocab(
+            self.wordvec.stoi,
+            specials=[pad_token, unk_token],
+            special_first=True,
+            min_freq=0,
+        )
 
-        self.vocab.set_default_index(0)
+        self.vocab.set_default_index(1)
 
         # add the unk embedding (zeros tensor) at the beginning of wordvec
         self.wordvec.vectors = torch.cat(
-            [torch.zeros(1, self.wordvec.dim), self.wordvec.vectors], dim=0
+            [
+                torch.zeros(1, self.wordvec.dim),
+                torch.zeros(1, self.wordvec.dim),
+                self.wordvec.vectors,
+            ],
+            dim=0,
         )
         # and update accordingly itos and stoi
-        self.wordvec.itos.insert(0, unk_token)
+        self.wordvec.itos.insert(0, pad_token)
+        self.wordvec.itos.insert(1, unk_token)
         self.wordvec.stoi = {word: i for i, word in enumerate(self.wordvec.itos)}
 
         return self
@@ -130,7 +141,7 @@ class WordvecBuilder:
     def _add_token(self, token):
         if token in self.vocab:
             return  # token already in vocab
-        
+
         empty = torch.empty(1, self.wordvec.dim)  # xavier_normal_ requires 2 dim
         embedding = nn.init.xavier_normal_(empty).reshape(-1)
 

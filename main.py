@@ -37,7 +37,7 @@ def main():
 
     if args.checkpoint:
         model = WeakvgModel.load_from_checkpoint(
-            args.checkpoint, wordvec=wordvec, vocab=vocab, strict=False
+            args.checkpoint, strict=False, wordvec=wordvec, vocab=vocab,
         )
         logging.info(f"Loaded model at {args.checkpoint}")
     else:
@@ -45,6 +45,7 @@ def main():
             wordvec,
             vocab,
             omega=args.omega,
+            lr=args.lr,
             neg_selection=args.neg_selection,
             use_relations=args.use_relations,
         )

@@ -22,11 +22,13 @@ class WeakvgModel(pl.LightningModule):
         wordvec,
         vocab,
         omega=0.5,
+        lr=1e-5,
         neg_selection="random",
         use_relations=False,
     ) -> None:
         super().__init__()
         self.use_relations = use_relations
+        self.lr = lr
         we = WordEmbedding(wordvec, vocab, freeze=False)
         we_freezed = WordEmbedding(wordvec, vocab, freeze=True)
         self.concept_branch = ConceptBranch(word_embedding=we_freezed)
@@ -126,7 +128,7 @@ class WeakvgModel(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=1e-5)
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
 
     def predict_candidates(self, scores, proposals):
         """

@@ -108,6 +108,12 @@ def get_args():
         help="Weight for the network prediction. Default: 0.5",
     )
     model_group.add_argument(
+        "--lr",
+        type=float,
+        default=1e-5,
+        help="Learning rate. Default: 1e-5",
+    )
+    model_group.add_argument(
         "--neg_selection",
         type=str,
         default="random",

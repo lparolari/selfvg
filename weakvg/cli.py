@@ -97,7 +97,7 @@ def get_args():
     )
 
     # model params
-    model_group = parser.add_argument_group("dataset arguments")
+    model_group = parser.add_argument_group("model arguments")
     model_group.add_argument(
         "--checkpoint", type=str, default=None, help="Checkpoint to load. Default: None"
     )

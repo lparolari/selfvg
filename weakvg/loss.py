@@ -20,14 +20,15 @@ class Loss(nn.Module):
         queries = x["queries"]  # [b, q, w]
         scores = x["scores"]  # [b, q, b, p]
 
-        queries_e = self.we(queries)  # [b, q, w, d]
-
-        x = {**x, "queries_e": queries_e}
-
-        n_words = (queries != 0).sum(-1)  # [b, q]
+        queries_mask = (queries != 0) # [b, q, w]
+        n_words = queries_mask.sum(-1)  # [b, q]
         is_query = n_words > 0  # [b, q]
         n_queries = is_query.sum(-1).unsqueeze(-1)  # [b, 1]
         has_query = is_query.any(-1).unsqueeze(-1)  # [b, 1]
+
+        queries_e = self.we(queries, queries_mask)  # [b, q, w, d]
+
+        x = {**x, "queries_e": queries_e}
 
         scores, _ = scores.max(-1)  # [b, q, b]
         scores = scores.sum(-2) / n_queries  # [b, b]

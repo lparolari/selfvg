@@ -19,6 +19,7 @@ def main():
 
     tokenizer = get_tokenizer()
     wordvec, vocab = get_wordvec(
+        args.wv_type,
         custom_labels=[] if args.dev else get_objects_vocab(),
         custom_tokens=[], # TODO: get_objects_vocab("data/objects_vocab_merged.txt"),
     )

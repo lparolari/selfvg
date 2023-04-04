@@ -10,7 +10,7 @@ from weakvg.wordvec import get_wordvec
 class TestWordEmbedding(unittest.TestCase):
     def test_word_embedding_similarity(self):
         wordvec, vocab = get_wordvec()
-        we = WordEmbedding(wordvec, vocab)
+        we = WordEmbedding(wordvec)
 
         index = torch.tensor([vocab["man"], vocab["woman"], vocab["person"]])
 
@@ -36,7 +36,7 @@ class TestTextualBranch(unittest.TestCase):
         super().setUp()
 
         self.wordvec, self.vocab = get_wordvec()
-        self.we = WordEmbedding(self.wordvec, self.vocab)
+        self.we = WordEmbedding(self.wordvec)
 
     def test_lstm(self):
         queries_idx = [
@@ -57,7 +57,7 @@ class TestVisualBranch(unittest.TestCase):
         super().setUp()
 
         self.wordvec, self.vocab = get_wordvec()
-        self.we = WordEmbedding(self.wordvec, self.vocab)
+        self.we = WordEmbedding(self.wordvec)
 
     def test_spatial(self):
         proposals = torch.tensor([[[20, 20, 80, 100]]])  # [b, p, 4]
@@ -94,7 +94,7 @@ class TestConceptBranch(unittest.TestCase):
         super().setUp()
 
         self.wordvec, self.vocab = get_wordvec()
-        self.we = WordEmbedding(self.wordvec, self.vocab)
+        self.we = WordEmbedding(self.wordvec)
 
     def test_forward(self):
         heads = torch.tensor(

@@ -8,6 +8,12 @@ from weakvg.wordvec import get_wordvec
 
 
 class TestWordEmbedding(unittest.TestCase):
+    def setUp(self):
+        import pytorch_lightning as pl
+
+        # seeding is required for reproducibility with BERT
+        pl.seed_everything(42)
+
     def test_word_embedding_similarity(self):
         wordvec, vocab = get_wordvec()
         we = WordEmbedding(wordvec)
@@ -28,6 +34,29 @@ class TestWordEmbedding(unittest.TestCase):
         )
         self.assertAlmostEqual(
             cosine_similarity(man, woman, dim=0).item(), 0.6999, places=4
+        )
+    
+    def test_word_embedding_similarity_bert(self):
+        wordvec, vocab = get_wordvec("bert")
+        we = WordEmbedding(wordvec)
+
+        index = torch.tensor([vocab["man"], vocab["woman"], vocab["person"]])
+        attn = torch.tensor([1, 1, 1]).bool()
+
+        emb = we(index, attn)
+
+        man = emb[0]
+        woman = emb[1]
+        person = emb[2]
+
+        self.assertAlmostEqual(
+            cosine_similarity(man, person, dim=0).item(), 0.9320, places=4
+        )
+        self.assertAlmostEqual(
+            cosine_similarity(woman, person, dim=0).item(), 0.9927, places=4
+        )
+        self.assertAlmostEqual(
+            cosine_similarity(man, woman, dim=0).item(), 0.9461, places=4
         )
 
 

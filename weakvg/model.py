@@ -29,9 +29,8 @@ class WeakvgModel(pl.LightningModule):
         super().__init__()
         self.use_relations = use_relations
         self.lr = lr
-        we = WordEmbedding(
-            wordvec, freeze=True
-        )  # TODO: temporarily freezed, revert back to False
+        # TODO: temporarily freezed, revert back to False
+        we = WordEmbedding(wordvec, freeze=True)
         we_freezed = WordEmbedding(wordvec, freeze=True)
         self.concept_branch = ConceptBranch(word_embedding=we_freezed)
         self.visual_branch = VisualBranch(word_embedding=we)
@@ -296,30 +295,44 @@ class WordEmbedding(nn.Module):
 
         if issubclass(type(wordvec), BertModel):
             self.factory = "bert"
-            self.backbone = wordvec
+            self.bert = wordvec
+            self.lin = nn.Linear(768, 300)
 
-            for param in self.backbone.parameters():
+            for param in self.bert.parameters():
                 param.requires_grad = not freeze
+
+            nn.init.xavier_uniform_(self.lin.weight)
+            nn.init.zeros_(self.lin.bias)
 
     def forward(self, x, *args, **kwargs):
         if self.factory == "bert":
-            kwargs = {"return_dict": False} | kwargs
             mask = args[0]
+            return self.forward_bert(x, mask, **kwargs)
 
-            sh = x.shape
+        if self.factory == "vectors":
+            return self.emb(x)
 
-            input_ids = x.reshape(-1, sh[-1])
-            attention_mask = mask.reshape(-1, sh[-1]).long()
+        raise NotImplementedError(
+            f"WordEmbedding does not implement '{self.factory}' factory"
+        )
 
-            out, _ = self.backbone(input_ids, attention_mask, **kwargs)
+    def forward_bert(self, x, mask, **kwargs):
+        kwargs = {"return_dict": False} | kwargs
 
-            out = out.reshape(*sh, -1)
+        sh = x.shape
 
-            out = out.masked_fill(~mask.unsqueeze(-1), 0)
+        input_ids = x.reshape(-1, sh[-1])
+        attention_mask = mask.reshape(-1, sh[-1]).long()
 
-            return out
+        out, _ = self.bert(input_ids, attention_mask, **kwargs)
 
-        return self.emb(x)
+        out = out.reshape(*sh, -1)
+
+        out = out.masked_fill(~mask.unsqueeze(-1), 0)
+        out = self.lin(out)
+        out = out.masked_fill(~mask.unsqueeze(-1), 0)
+
+        return out
 
 
 class ConceptBranch(nn.Module):
@@ -332,19 +345,22 @@ class ConceptBranch(nn.Module):
         heads = x["heads"]  # [b, q, h]
         labels = x["labels"]  # [b, p]
 
-        heads_mask = heads != 0
+        heads_mask = heads != 0  # [b, q, h]
         n_heads = heads_mask.sum(-1).unsqueeze(-1)  # [b, q, 1]
 
         label_mask = labels != 0
 
         heads_e = self.we(heads, heads_mask)  # [b, q, h, d]
-        heads_e = heads_e.sum(-2) / n_heads  # [b, q, d]
+        heads_e = heads_e.masked_fill(~heads_mask.unsqueeze(-1), 0.)
+        heads_e = heads_e.sum(-2) / n_heads.clamp(1)  # [b, q, d]  - clamp is required to avoid div by 0
         heads_e = heads_e.unsqueeze(-2).unsqueeze(-2)  # [b, q, 1, 1, d]
 
         labels_e = self.we(labels, label_mask)  # [b, p, d]
         labels_e = labels_e.unsqueeze(0).unsqueeze(0)  # [1, 1, b, p, d]
 
         scores = self.sim_fn(heads_e, labels_e)  # [b, q, b, p]
+
+        scores = scores.masked_fill(~get_concepts_mask_(x), 0)
 
         return scores
 
@@ -355,7 +371,7 @@ class VisualBranch(nn.Module):
 
         self.we = word_embedding
 
-        self.fc = nn.Linear(2048 + 5, 768)
+        self.fc = nn.Linear(2048 + 5, 300)
         self.act = nn.LeakyReLU()
 
         self._init_weights()
@@ -409,7 +425,7 @@ class TextualBranch(nn.Module):
     def __init__(self, word_embedding):
         super().__init__()
         self.we = word_embedding
-        self.lstm = nn.LSTM(768, 768)
+        self.lstm = nn.LSTM(300, 300)
 
     def forward(self, x):
         from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence

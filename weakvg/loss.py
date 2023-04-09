@@ -53,11 +53,12 @@ class Loss(nn.Module):
         :return: A tensor of shape `[b, b]` with negative mask
         """
         queries = x["queries"]  # [b, q, w]
+        queries_e = x["queries_e"]  # [b, q, w, d]
 
         if self.neg_selection == "textual_sim_max":
             # select the most similar example according to query similarity
 
-            sim = self.textual_sim(queries)  # [b, b]
+            sim = self.textual_sim(queries, queries_e)  # [b, b]
             sim = (sim + 1) / 2  # [b, b]  - translate and scale to range [0, 1]
 
             # filter positive examples, which have similarity 1
@@ -74,14 +75,14 @@ class Loss(nn.Module):
         # default to random selection
         return pos.roll(-1, dims=0)  # [b, b]
 
-    def textual_sim(self, queries):
+    def textual_sim(self, queries, queries_e):
         """
         Returns a tensor of shape `[b, b]` with the averaged similarity between examples.
         """
         is_word, _ = get_queries_mask(queries)  # [b, q, w], [b, q]
         n_words, n_queries = get_queries_count(queries)  # [b, q], [b]
 
-        queries_e = self.we(queries, is_word)  # [b, q, w, d]
+        # queries_e = self.we(queries, is_word)  # [b, q, w, d]
 
         b = queries_e.shape[0]
 

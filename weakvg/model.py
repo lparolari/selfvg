@@ -30,14 +30,13 @@ class WeakvgModel(pl.LightningModule):
         self.use_relations = use_relations
         self.lr = lr
         # TODO: temporarily freezed, revert back to False
-        # we = WordEmbedding(wordvec, freeze=True)
+        we = WordEmbedding(wordvec, freeze=True)
         we_freezed = WordEmbedding(wordvec, freeze=True)
         self.concept_branch = ConceptBranch(word_embedding=we_freezed)
-        self.visual_branch = VisualBranch(word_embedding=we_freezed)
-        self.textual_branch = TextualBranch(word_embedding=we_freezed)
+        self.visual_branch = VisualBranch(word_embedding=we)
+        self.textual_branch = TextualBranch(word_embedding=we)
         self.prediction_module = SimilarityPredictionModule(omega=omega)
         self.loss = Loss(word_embedding=we_freezed, neg_selection=neg_selection)
-        self.reconstruct_bert = ReconstructBert(word_embedding=we_freezed)
 
         self.save_hyperparameters(ignore=["wordvec", "vocab"])
 
@@ -76,11 +75,7 @@ class WeakvgModel(pl.LightningModule):
 
         scores, _ = self.forward(batch)  # [b, q, b, p]
 
-        loss = 0.0
-
-        loss += self.loss({**batch, "scores": scores})
-
-        loss += self.reconstruct_bert(batch)
+        loss = self.loss({**batch, "scores": scores})
 
         candidates, _ = self.predict_candidates(scores, proposals)  # [b, q, 4]
 
@@ -322,7 +317,6 @@ class WordEmbedding(nn.Module):
         )
 
     def forward_bert(self, x, mask, **kwargs):
-        return_hidden = kwargs.pop("return_hidden", False)
         kwargs = {"return_dict": False} | kwargs
 
         sh = x.shape
@@ -330,18 +324,15 @@ class WordEmbedding(nn.Module):
         input_ids = x.reshape(-1, sh[-1])
         attention_mask = mask.reshape(-1, sh[-1]).long()
 
-        emb, _ = self.bert(input_ids, attention_mask, **kwargs)
+        out, _ = self.bert(input_ids, attention_mask, **kwargs)
 
-        emb = emb.reshape(*sh, -1)
-        emb = emb.masked_fill(~mask.unsqueeze(-1), 0)
+        out = out.reshape(*sh, -1)
 
-        proj = self.lin(emb)
-        proj = proj.masked_fill(~mask.unsqueeze(-1), 0)
+        out = out.masked_fill(~mask.unsqueeze(-1), 0)
+        out = self.lin(out)
+        out = out.masked_fill(~mask.unsqueeze(-1), 0)
 
-        if return_hidden:
-            return proj, emb
-
-        return proj
+        return out
 
 
 class ConceptBranch(nn.Module):
@@ -489,27 +480,3 @@ class TextualBranch(nn.Module):
         queries_x = queries_x.masked_fill(~mask, 0)
 
         return queries_x
-
-
-class ReconstructBert(nn.Module):
-    def __init__(self, word_embedding):
-        super().__init__()
-        self.we = word_embedding
-        self.lin = nn.Linear(300, 768)
-        self.loss = nn.MSELoss(reduction="mean")
-
-        nn.init.xavier_normal_(self.lin.weight)
-        nn.init.zeros_(self.lin.bias)
-    
-    def forward(self, x):
-        queries = x["queries"]  # [b, q, w]
-        mask = queries != 0  # [b, q, w]
-
-        code, emb = self.we(queries, mask, return_hidden=True)  # [b, q, w, d]
-
-        rec = self.lin(code)  # [b, q, w, d']
-        rec = rec.masked_fill(~mask.unsqueeze(-1), 0)
-
-        loss = self.loss(rec, emb)
-
-        return loss

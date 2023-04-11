@@ -54,7 +54,6 @@ class TestWordvec(unittest.TestCase):
         # the last token is [PAD], however bert produces a non-zero vector
         self.assertFalse(torch.equal(out[0, -1], torch.zeros(768)))
 
-
     def test_get_objects_vocab(self):
         self.assertEqual(len(get_objects_vocab()), 1600)
 

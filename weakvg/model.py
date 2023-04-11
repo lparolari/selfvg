@@ -318,12 +318,18 @@ class WordEmbedding(nn.Module):
         label_mask = labels != 0  # [b, q, p]
         head_mask = heads != 0  # [b, q, h]
 
+        b = queries.shape[0]
         w = queries.shape[2]
         p = labels.shape[2]
         h = heads.shape[2]
 
-        inp = torch.cat([queries, labels, heads], dim=-1)  # [b, q, j], j = w + p + h
-        mask = torch.cat([query_mask, label_mask, head_mask], dim=-1)  # [b, q, j]
+        # adding separator tokens between labels and heads.
+        # please note that "queries" already has the cls and separator token.
+        sep = torch.tensor([102]).to(queries.device).reshape(1, 1, 1).repeat(b, q, 1)
+        true = torch.tensor([True]).to(queries.device).reshape(1, 1, 1).repeat(b, q, 1)
+
+        inp = torch.cat([queries, labels, sep, heads, sep], dim=-1)  # [b, q, j], j = w + p + h + 4
+        mask = torch.cat([query_mask, label_mask, true, head_mask, true], dim=-1)  # [b, q, j]
 
         shape = inp.shape
 
@@ -338,9 +344,9 @@ class WordEmbedding(nn.Module):
         out = self.lin(out)  # [b, q, j, e]
         out = out.masked_fill(~mask.unsqueeze(-1), 0)
 
-        split = out.split((w, p, h), dim=-2)  # [b, q, x, e], x ∈ {w, p, h}
+        split = out.split((w, p, 1, h, 1), dim=-2)  # [b, q, x, e], x ∈ {w, p, h}
 
-        queries_e, labels_e, heads_e = split
+        queries_e, labels_e, _, heads_e, _ = split
 
         return {
             "queries_e": queries_e,

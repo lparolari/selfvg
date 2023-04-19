@@ -33,6 +33,18 @@ def get_args():
         help="Experiment group. Default: None",
     )
     exp_group.add_argument(
+        "--exp_project",
+        type=str,
+        default="selfvg",
+        help="Experiment project name. Default: selfvg",
+    )
+    exp_group.add_argument(
+        "--exp_entity",
+        type=str,
+        default="weakly_guys",
+        help="Experiment entity. Default: weakly_guys",
+    )
+    exp_group.add_argument(
         "--mode",
         type=str,
         choices=["train", "test"],
@@ -153,8 +165,8 @@ def get_logger(args, model=None):
         import wandb
 
         logger = pl.loggers.WandbLogger(
-            project="weakvg++",
-            entity="weakly_guys",
+            project=args.exp_project,
+            entity=args.exp_entity,
             log_model=False if args.dev else True,
             name=args.exp_id,
             notes=args.exp_notes,
@@ -181,6 +193,8 @@ def get_logger(args, model=None):
             "exp_notes",
             "exp_tags",
             "exp_group",
+            "exp_project",
+            "exp_entity",
             "verbose",
             "logger",
             "dev",

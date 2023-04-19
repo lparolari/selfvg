@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 
 from weakvg.cli import get_args, get_callbacks, get_logger
 from weakvg.datamodule import WeakvgDataModule
-from weakvg.model import WeakvgModel
+from weakvg.model import WeakvgModel, SelfvgModel
 from weakvg.wordvec import get_nlp, get_objects_vocab, get_tokenizer, get_wordvec
 
 
@@ -49,6 +49,8 @@ def main():
             neg_selection=args.neg_selection,
             use_relations=args.use_relations,
         )
+        # TODO: move upstream training before downstream and use a flag
+        model = SelfvgModel(wordvec, vocab, lr=args.lr)
 
     logging.info(f"Model hparams: " + json.dumps(model.hparams_initial, indent=4))
 
@@ -59,7 +61,7 @@ def main():
         accelerator=args.accelerator,
         devices=args.devices,
         max_epochs=args.max_epochs,
-        logger=logger,
+        logger=None,
         callbacks=callbacks,
     )
 

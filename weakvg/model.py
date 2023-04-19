@@ -93,20 +93,20 @@ class SelfvgModel(pl.LightningModule):
             mm_mask.squeeze(-1),
         )  # [b, p, q]
 
-        preds_neg = pos_logits.less(0.5).any(-1).float()
-        preds_pos = neg_logits.greater(0.5).any(-1).float()
+        preds_pos = pos_logits.less(0.5).any(-1).float()
+        preds_neg = neg_logits.greater(0.5).any(-1).float()
 
         # penalize many neg class predictions (i.e., even if we classified correctly
         # at least for one query, we still want a correlation between this proposal and
         # the other positive queries because they belong the tha same example)
-        penalty_pos = (pos_logits - 0.5).clamp(0).sum(-1)
-        loss_pos = (1 - preds_neg) + lam * penalty_pos  # [b, p]
-        penalty_neg = (1 - (neg_logits + 0.5).clamp(1)).sum(-1)
-        loss_neg = (1 - preds_pos) + lam * penalty_neg  # [b, p]
+        penalty_pos = (pos_logits - 0.5).clamp(min=0).sum(-1)
+        loss_pos = (1 - preds_pos) + lam * penalty_pos  # [b, p]
+        penalty_neg = (1 - (neg_logits + 0.5).clamp(max=1)).sum(-1)
+        loss_neg = (1 - preds_neg) + lam * penalty_neg  # [b, p]
 
         loss = (loss_pos + loss_neg).sum() / visual_mask.sum()
 
-        preds = torch.cat([preds_neg, preds_pos], dim=0)
+        preds = torch.cat([preds_pos, preds_neg], dim=0)
 
         acc = preds.sum() / visual_mask.repeat(2, 1).sum()
 

@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from weakvg.loss import Loss
 from weakvg.masking import (
@@ -14,6 +15,114 @@ from weakvg.masking import (
     get_relations_mask_,
 )
 from weakvg.utils import ext_textual, ext_visual, iou, mask_softmax, tlbr2ctwh
+
+
+class Classifier(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super().__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, 1)
+        nn.init.xavier_uniform_(self.fc1.weight)
+        nn.init.xavier_uniform_(self.fc2.weight)
+        nn.init.zeros_(self.fc1.bias)
+        nn.init.zeros_(self.fc2.bias)
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = torch.sigmoid(self.fc2(x))
+        return x
+
+
+class SelfvgModel(pl.LightningModule):
+    def __init__(self, wordvec, vocab, lr):
+        super().__init__()
+        self.wordvec = wordvec
+        self.vocab = vocab
+        we_freezed = WordEmbedding(wordvec, vocab, freeze=True)
+        self.lr = lr
+        self.visual_branch = VisualBranch(we_freezed)
+        self.textual_branch = TextualBranch(we_freezed)
+        self.cls = Classifier(600, 300)  # TODO: parametric
+        self.save_hyperparameters(ignore=["wordvec", "vocab"])
+
+    def forward(self, x):
+        textual_feat = self.textual_branch(x)  # [b, q, d]
+        textual_mask = get_queries_mask_(x)[1]  # [b, q]
+        visual_feat = self.visual_branch(x)  # [b, p, d]
+        visual_mask = get_proposals_mask_(x)  # [b, p]
+
+        b = textual_feat.shape[0]
+        q = textual_feat.shape[1]
+        p = visual_feat.shape[1]
+
+        ext_txt = lambda x: x.unsqueeze(1).repeat(1, p, 1, 1)  # [b, p, q, d]
+        ext_viz = lambda x: x.unsqueeze(2).repeat(1, 1, q, 1)  # [b, p, q, d]
+
+        # ---
+
+        txt_mask = ext_txt(textual_mask.unsqueeze(-1))  # [b, p, q, 1]
+        viz_mask = ext_viz(visual_mask.unsqueeze(-1))  # [b, p, q, 1]
+        mm_mask = txt_mask & viz_mask  # [b, p, q, 1]
+
+        viz = ext_viz(visual_feat)  # [b, p, q, d]
+        txt_pos = ext_txt(textual_feat)  # [b, p, q, d]
+
+        neg_idx = torch.arange(b).roll(-1)  # [b]
+        txt_neg = txt_pos[neg_idx]  # [b, p, q, d]
+
+        pos = torch.cat([viz, txt_pos], dim=-1)  # [b, p, q, d*2]
+        pos = pos.masked_fill(~mm_mask, 0)
+
+        neg = torch.cat([viz, txt_neg], dim=-1)  # [b, p, q, d*2]
+        neg = neg.masked_fill(~mm_mask, 0)
+
+        pos_logits = self.cls(pos).masked_fill(~mm_mask, 0.5)  # [b, p, q, 1]
+        neg_logits = self.cls(neg).masked_fill(~mm_mask, 0.5)  # [b, p, q, 1]
+
+        return pos_logits, neg_logits, mm_mask
+
+    def training_step(self, batch, batch_idx, part="train"):
+        lam = 1.0
+        visual_mask = get_proposals_mask_(batch)  # [b, p]
+
+        pos_logits, neg_logits, mm_mask = self(batch)
+
+        pos_logits, neg_logits, mm_mask = (
+            pos_logits.squeeze(-1),
+            neg_logits.squeeze(-1),
+            mm_mask.squeeze(-1),
+        )  # [b, p, q]
+
+        preds_neg = pos_logits.less(0.5).any(-1).float()
+        preds_pos = neg_logits.greater(0.5).any(-1).float()
+
+        # penalize many neg class predictions (i.e., even if we classified correctly
+        # at least for one query, we still want a correlation between this proposal and
+        # the other positive queries because they belong the tha same example)
+        penalty_pos = (pos_logits - 0.5).clamp(0).sum(-1)
+        loss_pos = (1 - preds_neg) + lam * penalty_pos  # [b, p]
+        penalty_neg = (1 - (neg_logits + 0.5).clamp(1)).sum(-1)
+        loss_neg = (1 - preds_pos) + lam * penalty_neg  # [b, p]
+
+        loss = (loss_pos + loss_neg).sum() / visual_mask.sum()
+
+        preds = torch.cat([preds_neg, preds_pos], dim=0)
+
+        acc = preds.sum() / visual_mask.repeat(2, 1).sum()
+
+        self.log(f"{part}_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(f"{part}_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
+
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        return self.training_step(batch, batch_idx, part="val")
+
+    def test_step(self, batch, batch_idx):
+        return self.training_step(batch, batch_idx, part="test")
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
 
 
 class WeakvgModel(pl.LightningModule):
@@ -42,9 +151,9 @@ class WeakvgModel(pl.LightningModule):
     def forward(self, x):
         concepts_pred = self.concept_branch(x)  # [b, q, b, p]
 
-        visual_feat = self.visual_branch(x)  # [b, p, d], [b, p, 1]
+        visual_feat = self.visual_branch(x)  # [b, p, d]
 
-        textual_feat = self.textual_branch(x)  # [b, q, d], [b, q, 1]
+        textual_feat = self.textual_branch(x)  # [b, q, d]
 
         visual_mask = get_proposals_mask_(x)  # [b, p]
         textual_mask = get_queries_mask_(x)[1]  # [b, q]
